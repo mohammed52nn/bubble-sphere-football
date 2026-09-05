@@ -141,6 +141,7 @@ const profileSchema = {
     "height",
     "marketValue",
     "rating",
+    "bio",
     "career",
     "achievements",
     "stats",
@@ -159,6 +160,7 @@ const profileSchema = {
     height: str,
     marketValue: str,
     rating: str,
+    bio: str,
     confidence: { type: "number" },
     career: {
       type: "array",
@@ -287,7 +289,8 @@ export async function profileFor(args: {
         user: [
           `ابنِ ملفًا للاعب: ${args.displayName} (${args.latinName}).`,
           "career: أهم 5 محطات. achievements: أهم 6 إنجازات حقيقية. stats: 4 أرقام موثوقة (مثل المباريات/الأهداف).",
-          "confidence: رقم بين 0 و 1 يمثل ثقتك بدقة الملف.",
+          "bio: نبذة عربية من 2-3 أسطر عن اللاعب ووضعه الحالي، بلا مبالغة ولا تخمين.",
+      "confidence: رقم بين 0 و 1 يمثل ثقتك بدقة الملف.",
           "القيمة السوقية والتقييم: اتركهما \"\" إن لم تكن واثقًا.",
         ].join("\n"),
         schemaName: "player_profile",
@@ -323,7 +326,8 @@ export async function profileFor(args: {
       height: clean(ai["height"]),
       marketValue: clean(ai["marketValue"]),
       rating: clean(ai["rating"]),
-      bio: portrait?.bio ?? null,
+      // Arabic AI bio first; the Wikipedia summary is a fallback (may be English).
+      bio: clean(ai["bio"]) ?? portrait?.bio ?? null,
       career: Array.isArray(ai["career"])
         ? (ai["career"] as { period?: string; club?: string; note?: string }[])
             .map((step) => ({

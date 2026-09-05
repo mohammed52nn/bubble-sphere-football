@@ -105,8 +105,17 @@ export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
             />
           )}
 
+          {/* readability scrim behind the name */}
+          <span
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 rounded-b-full"
+            style={{
+              background:
+                "linear-gradient(to top, oklch(0.14 0.04 258 / 88%) 0%, oklch(0.14 0.04 258 / 45%) 55%, transparent 100%)",
+            }}
+          />
+
           {/* name plate */}
-          <span className="glass-panel absolute inset-x-1 bottom-1 rounded-full px-1.5 py-[3px] text-center">
+          <span className="absolute inset-x-1.5 bottom-[6%] rounded-full border border-silver/20 bg-background/55 px-1.5 py-[3px] text-center backdrop-blur-sm">
             <span className="block truncate text-[11px] leading-tight font-medium text-foreground text-glow">
               {seed.displayName}
             </span>
