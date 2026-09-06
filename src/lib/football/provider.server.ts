@@ -257,6 +257,7 @@ async function liveFixtureForTeam(teamId: string): Promise<FixtureInfo | null> {
 async function participationFor(
   fixtureId: string,
   playerId: string,
+  playerName: string,
   fixture: FixtureInfo,
 ): Promise<PlayerMatchStatus> {
   const raw = await cached<Record<string, unknown>>(`lu:${fixtureId}`, TTL.liveFixture, () =>
@@ -280,12 +281,14 @@ async function participationFor(
   }
   if (!inStart && !onBench) return "NOT_IN_SQUAD";
 
-  const subEvents = fixture.events.filter((event) => event.type === "substitution");
-  // Provider names the incoming player in `playerName` for substitutions; we can
-  // only match by name, so treat it as a soft signal and never invent a status.
-  const nameHit = subEvents.length > 0;
-  if (inStart) return nameHit ? "PLAYING" : "PLAYING";
-  return onBench ? "SUBSTITUTE" : "UNKNOWN";
+  // Substitution events name the incoming player; matching by name is the only
+  // signal the provider gives here, so an absent match keeps the lineup status.
+  const target = playerName.toLowerCase();
+  const named = fixture.events.some(
+    (event) => event.type === "substitution" && (event.playerName ?? "").toLowerCase() === target,
+  );
+  if (inStart) return named ? "SUBBED_OFF" : "PLAYING";
+  return named ? "SUBBED_ON" : "SUBSTITUTE";
 }
 
 async function nextFixtureForTeam(teamId: string): Promise<FixtureInfo | null> {
@@ -333,7 +336,7 @@ export async function playerLiveInfo(input: {
   if (active) {
     let status: PlayerMatchStatus = "UNKNOWN";
     try {
-      status = await participationFor(active.id, resolved.id, active);
+      status = await participationFor(active.id, resolved.id, resolved.name, active);
     } catch {
       status = "UNKNOWN";
     }
