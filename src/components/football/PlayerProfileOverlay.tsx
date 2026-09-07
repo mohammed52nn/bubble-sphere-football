@@ -75,16 +75,42 @@ export function PlayerProfileOverlay({
           >
             <X className="h-4 w-4" aria-hidden />
           </button>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing || loading}
-            className="glass-panel flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium text-foreground disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <RotateCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
-            تحديث
-          </button>
-        </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleShare();
+              }}
+              aria-label={`مشاركة ملف ${name}`}
+              className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Share2 className="h-4 w-4" aria-hidden />
+            </button>
+            <a
+              href={`https://www.google.com/search?q=${encodeURIComponent(seed.latinName)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              aria-label={`ابحث عن ${name} في Google`}
+              className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Globe className="h-4 w-4" aria-hidden />
+            </a>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRefresh();
+              }}
+              disabled={refreshing || loading}
+              className="glass-panel flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium text-foreground disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <RotateCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
+              تحديث
+            </button>
+          </div>
+
 
         <div className="animate-rise-in px-4">
           <div className="flex items-end gap-4">
