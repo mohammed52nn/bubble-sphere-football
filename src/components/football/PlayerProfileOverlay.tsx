@@ -133,6 +133,9 @@ export function PlayerProfileOverlay({
               تحديث
             </button>
           </div>
+        </div>
+
+
 
 
         <div className="animate-rise-in px-4">
