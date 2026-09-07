@@ -1,5 +1,7 @@
-import { useEffect } from "react";
-import { ExternalLink, RotateCw, ShieldCheck, Users, X } from "lucide-react";
+import { useCallback, useEffect } from "react";
+import { ExternalLink, Globe, RotateCw, Share2, ShieldCheck, Users, X } from "lucide-react";
+import { toast } from "sonner";
+
 import { LoadingOrb } from "./LoadingOrb";
 import { formatDate, initialsOf, relativeTime } from "@/lib/football/format";
 import { UNAVAILABLE, type PlayerProfile, type PlayerSeed } from "@/lib/football/types";
