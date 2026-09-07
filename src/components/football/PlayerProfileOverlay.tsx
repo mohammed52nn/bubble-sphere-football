@@ -60,6 +60,27 @@ export function PlayerProfileOverlay({
   const image = profile?.image ?? seed.image;
   const name = profile?.displayName ?? seed.displayName;
 
+  const handleShare = useCallback(async () => {
+    const text = `${name} — فقاعات كرة القدم`;
+    const url = typeof window === "undefined" ? "" : window.location.href;
+    try {
+      if (typeof navigator !== "undefined" && "share" in navigator) {
+        await navigator.share({ title: text, text, url });
+        return;
+      }
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        toast.success("تم نسخ الرابط.");
+        return;
+      }
+      toast.error("المشاركة غير مدعومة على هذا الجهاز.");
+    } catch {
+      /* المستخدم ألغى المشاركة — لا شيء لفعله */
+    }
+  }, [name]);
+
+
+
   return (
     <div
       role="dialog"
