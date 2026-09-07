@@ -61,15 +61,17 @@ export function PlayerProfileOverlay({
   const name = profile?.displayName ?? seed.displayName;
 
   const handleShare = useCallback(async () => {
+    if (typeof navigator === "undefined") return;
+    const nav: Navigator = navigator;
     const text = `${name} — فقاعات كرة القدم`;
     const url = typeof window === "undefined" ? "" : window.location.href;
     try {
-      if (typeof navigator !== "undefined" && "share" in navigator) {
-        await navigator.share({ title: text, text, url });
+      if (typeof nav.share === "function") {
+        await nav.share({ title: text, text, url });
         return;
       }
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
+      if (nav.clipboard) {
+        await nav.clipboard.writeText(`${text}\n${url}`);
         toast.success("تم نسخ الرابط.");
         return;
       }
@@ -78,6 +80,7 @@ export function PlayerProfileOverlay({
       /* المستخدم ألغى المشاركة — لا شيء لفعله */
     }
   }, [name]);
+
 
 
 
