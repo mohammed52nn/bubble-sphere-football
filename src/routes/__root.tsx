@@ -13,6 +13,8 @@ import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { setupPwa } from "../lib/pwa";
+
 
 function NotFoundComponent() {
   return (
