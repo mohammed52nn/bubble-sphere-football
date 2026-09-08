@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
  * Progress that feels honest: climbs quickly at first, slows down, and never
  * pretends to finish. Once `done` flips true it snaps to 100 and stays there.
  */
-export function useSmartProgress(active: boolean, done: boolean, ceiling = 96) {
-  const [value, setValue] = useState(active && !done ? 8 : 0);
+export function useSmartProgress(active: boolean, done: boolean, ceiling = 95) {
+  const [value, setValue] = useState(active && !done ? 1 : 0);
   const timer = useRef<number | null>(null);
+  const startRef = useRef<number>(0);
 
   useEffect(() => {
     const clear = () => {
@@ -28,15 +29,25 @@ export function useSmartProgress(active: boolean, done: boolean, ceiling = 96) {
       return clear;
     }
 
-    setValue((current) => (current > 0 ? current : 6));
+    // Always start fresh from 1%.
+    setValue(1);
+    startRef.current = Date.now();
+
     timer.current = window.setInterval(() => {
-      setValue((current) => {
-        if (current >= ceiling) return ceiling;
-        const remaining = ceiling - current;
-        const step = Math.max(0.4, remaining * 0.06);
-        return Math.min(ceiling, current + step);
-      });
-    }, 220);
+      const elapsed = Date.now() - startRef.current;
+      let next: number;
+      if (elapsed < 4000) {
+        // Phase 1: 1% -> 70% over ~4s with a gentle ease-out curve.
+        const t = elapsed / 4000;
+        const eased = 1 - Math.pow(1 - t, 2);
+        next = 1 + 69 * eased;
+      } else {
+        // Phase 2: slow asymptotic climb from 70% toward the ceiling.
+        const over = elapsed - 4000;
+        next = 70 + (ceiling - 70) * (1 - Math.exp(-over / 8000));
+      }
+      setValue(Math.min(next, ceiling));
+    }, 120);
 
     return clear;
   }, [active, done, ceiling]);
