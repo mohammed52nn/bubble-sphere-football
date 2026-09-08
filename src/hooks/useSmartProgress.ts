@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
  * pretends to finish. Once `done` flips true it snaps to 100 and stays there.
  */
 export function useSmartProgress(active: boolean, done: boolean, ceiling = 96) {
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(active && !done ? 8 : 0);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
