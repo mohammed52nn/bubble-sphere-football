@@ -6,9 +6,12 @@ import { StadiumBackground } from "@/components/football/StadiumBackground";
 import { ResearchBox } from "@/components/football/ResearchBox";
 import { BubbleField } from "@/components/football/BubbleField";
 import { PlayerProfileOverlay } from "@/components/football/PlayerProfileOverlay";
+import { SmartLoaderInline, SmartLoaderScreen } from "@/components/football/SmartLoader";
 import { useBubbleField } from "@/hooks/useBubbleField";
+import { useOnline } from "@/hooks/useSmartProgress";
 import { discoverPlayers, getPlayerProfile } from "@/lib/football.functions";
 import type { PlayerSeed } from "@/lib/football/types";
+
 
 const TITLE = "فقاعات كرة القدم — اكتشف اللاعبين";
 const DESCRIPTION =
@@ -66,6 +69,16 @@ function Index() {
     if (discovery.isError) toast.error("تعذّر إتمام البحث. حاول مرة أخرى.");
   }, [discovery.isError]);
 
+  const online = useOnline();
+  const [booted, setBooted] = useState(false);
+  useEffect(() => {
+    if (field.bubbles.length > 0) setBooted(true);
+  }, [field.bubbles.length]);
+
+  const bootDone = booted;
+  const searching = !bootDone ? false : discovery.isFetching;
+
+
   const profile = useQuery({
     queryKey: ["profile", active?.latinName],
     enabled: active !== null,
@@ -106,6 +119,14 @@ function Index() {
     <main className="relative min-h-screen w-full overflow-x-hidden">
       <StadiumBackground />
 
+      <SmartLoaderScreen
+        active={!bootDone}
+        done={bootDone}
+        offline={!online}
+        failed={discovery.isError}
+        onRetry={() => void discovery.refetch()}
+      />
+
       <ResearchBox
         value={query}
         busy={discovery.isFetching}
@@ -116,14 +137,17 @@ function Index() {
         onFocusChange={setTyping}
       />
 
+      <SmartLoaderInline active={searching} done={!discovery.isFetching} />
+
       <BubbleField
         bubbles={field.bubbles}
         layouts={field.layouts}
-        loading={discovery.isLoading || discovery.isFetching}
+        loading={!bootDone || (field.bubbles.length === 0 && discovery.isFetching)}
         failed={discovery.isError}
         onOpen={setActive}
         onRetry={() => void discovery.refetch()}
       />
+
 
       <p className="pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-[11px] text-muted-foreground">
         اضغط على أي فقاعة لعرض ملف اللاعب — لن تتغير الفقاعات أثناء القراءة.
