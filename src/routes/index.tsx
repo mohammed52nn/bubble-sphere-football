@@ -119,6 +119,14 @@ function Index() {
     <main className="relative min-h-screen w-full overflow-x-hidden">
       <StadiumBackground />
 
+      <SmartLoaderScreen
+        active={!bootDone}
+        done={bootDone}
+        offline={!online}
+        failed={discovery.isError}
+        onRetry={() => void discovery.refetch()}
+      />
+
       <ResearchBox
         value={query}
         busy={discovery.isFetching}
@@ -129,14 +137,17 @@ function Index() {
         onFocusChange={setTyping}
       />
 
+      <SmartLoaderInline active={searching} done={!discovery.isFetching} />
+
       <BubbleField
         bubbles={field.bubbles}
         layouts={field.layouts}
-        loading={discovery.isLoading || discovery.isFetching}
+        loading={!bootDone || (field.bubbles.length === 0 && discovery.isFetching)}
         failed={discovery.isError}
         onOpen={setActive}
         onRetry={() => void discovery.refetch()}
       />
+
 
       <p className="pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-[11px] text-muted-foreground">
         اضغط على أي فقاعة لعرض ملف اللاعب — لن تتغير الفقاعات أثناء القراءة.
