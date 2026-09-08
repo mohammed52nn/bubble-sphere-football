@@ -69,6 +69,16 @@ function Index() {
     if (discovery.isError) toast.error("تعذّر إتمام البحث. حاول مرة أخرى.");
   }, [discovery.isError]);
 
+  const online = useOnline();
+  const [booted, setBooted] = useState(false);
+  useEffect(() => {
+    if (field.bubbles.length > 0) setBooted(true);
+  }, [field.bubbles.length]);
+
+  const bootDone = booted;
+  const searching = !bootDone ? false : discovery.isFetching;
+
+
   const profile = useQuery({
     queryKey: ["profile", active?.latinName],
     enabled: active !== null,
