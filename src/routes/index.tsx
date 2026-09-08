@@ -6,9 +6,12 @@ import { StadiumBackground } from "@/components/football/StadiumBackground";
 import { ResearchBox } from "@/components/football/ResearchBox";
 import { BubbleField } from "@/components/football/BubbleField";
 import { PlayerProfileOverlay } from "@/components/football/PlayerProfileOverlay";
+import { SmartLoaderInline, SmartLoaderScreen } from "@/components/football/SmartLoader";
 import { useBubbleField } from "@/hooks/useBubbleField";
+import { useOnline } from "@/hooks/useSmartProgress";
 import { discoverPlayers, getPlayerProfile } from "@/lib/football.functions";
 import type { PlayerSeed } from "@/lib/football/types";
+
 
 const TITLE = "فقاعات كرة القدم — اكتشف اللاعبين";
 const DESCRIPTION =
