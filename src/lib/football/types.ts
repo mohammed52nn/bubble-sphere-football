@@ -57,6 +57,7 @@ export interface PlayerProfile {
   news: NewsItem[];
   sources: { label: string; url: string }[];
   confidence: number;
+  aiStatus: "not_requested" | "enhanced" | "unavailable";
   lastUpdated: string;
 }
 
