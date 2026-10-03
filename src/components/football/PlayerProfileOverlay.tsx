@@ -3,6 +3,7 @@ import { ExternalLink, Globe, RotateCw, Share2, ShieldCheck, Users, X } from "lu
 import { toast } from "sonner";
 
 import { LoadingOrb } from "./LoadingOrb";
+import { useCurrentClubVerification } from "@/hooks/useCurrentClubVerification";
 import { formatDate, initialsOf, relativeTime } from "@/lib/football/format";
 import { UNAVAILABLE, type PlayerProfile, type PlayerSeed } from "@/lib/football/types";
 
@@ -59,6 +60,8 @@ export function PlayerProfileOverlay({
 
   const image = profile?.image ?? seed.image;
   const name = profile?.displayName ?? seed.displayName;
+  const clubCheck = useCurrentClubVerification(profile);
+  const verifiedClub = clubCheck.data;
 
   const handleShare = useCallback(async () => {
     if (typeof navigator === "undefined") return;
@@ -186,7 +189,12 @@ export function PlayerProfileOverlay({
           {profile && (
             <>
               <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                <Field label="النادي" value={profile.club} />
+                <Field
+                  label="النادي"
+                  value={
+                    verifiedClub?.status === "changed" ? verifiedClub.name : profile.club
+                  }
+                />
                 <Field label="المركز" value={profile.position} />
                 <Field label="الجنسية" value={profile.nationality} />
                 <Field
@@ -331,6 +339,20 @@ export function PlayerProfileOverlay({
                 <span>مستوى الثقة: {Math.round(profile.confidence * 100)}%</span>
                 <span aria-hidden>·</span>
                 <span>آخر تحديث: {formatDate(profile.lastUpdated)}</span>
+                {clubCheck.isFetching && !verifiedClub && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>جارٍ التحقق من النادي الحالي…</span>
+                  </>
+                )}
+                {verifiedClub && verifiedClub.status !== "unavailable" && verifiedClub.status !== "conflict" && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>
+                      ✓ تم التحقق من النادي ({verifiedClub.source}) {relativeTime(verifiedClub.verifiedAt)}
+                    </span>
+                  </>
+                )}
               </p>
             </>
           )}
