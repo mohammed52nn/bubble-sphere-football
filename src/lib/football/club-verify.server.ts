@@ -50,8 +50,8 @@ export const sofascoreProvider: CurrentClubVerificationProvider = {
         return {
           id: String(e["id"] ?? ""),
           name: s(e["name"]) ?? "",
-          team: s(o(e.team)["name"]),
-          nationality: s(o(e.country)["name"]),
+          team: s(o(e["team"])["name"]),
+          nationality: s(o(e["country"])["name"]),
           position: s(e["position"]),
         };
       })
@@ -68,7 +68,7 @@ export const sofascoreProvider: CurrentClubVerificationProvider = {
       team: s(team["name"]),
       teamId: team["id"] ? String(team["id"]) : null,
       teamLogo: team["id"] ? `https://api.sofascore.app/api/v1/team/${team["id"]}/image` : null,
-      nationality: s(o(p.country)["name"]),
+      nationality: s(o(p["country"])["name"]),
       position: s(p["position"]),
       retired: p["retired"] === true,
     };
