@@ -41,36 +41,36 @@ export const sofascoreProvider: CurrentClubVerificationProvider = {
   label: "SofaScore",
   async search(name) {
     const json = o(await getJson(`https://api.sofascore.com/api/v1/search/all?q=${encodeURIComponent(name)}`));
-    const results = Array.isArray(json.results) ? json.results : [];
+    const results = Array.isArray(json["results"]) ? json["results"] : [];
     return results
       .map(o)
-      .filter((r) => r.type === "player")
+      .filter((r) => r["type"] === "player")
       .map((r) => {
-        const e = o(r.entity);
+        const e = o(r["entity"]);
         return {
-          id: String(e.id ?? ""),
-          name: s(e.name) ?? "",
-          team: s(o(e.team).name),
-          nationality: s(o(e.country).name),
-          position: s(e.position),
+          id: String(e["id"] ?? ""),
+          name: s(e["name"]) ?? "",
+          team: s(o(e.team)["name"]),
+          nationality: s(o(e.country)["name"]),
+          position: s(e["position"]),
         };
       })
       .filter((c) => c.id && c.name)
       .slice(0, 8);
   },
   async player(id) {
-    const p = o(o(await getJson(`https://api.sofascore.com/api/v1/player/${encodeURIComponent(id)}`)).player);
-    if (!p.id) return null;
-    const team = o(p.team);
+    const p = o(o(await getJson(`https://api.sofascore.com/api/v1/player/${encodeURIComponent(id)}`))["player"]);
+    if (!p["id"]) return null;
+    const team = o(p["team"]);
     return {
-      id: String(p.id),
-      name: s(p.name) ?? "",
-      team: s(team.name),
-      teamId: team.id ? String(team.id) : null,
-      teamLogo: team.id ? `https://api.sofascore.app/api/v1/team/${team.id}/image` : null,
-      nationality: s(o(p.country).name),
-      position: s(p.position),
-      retired: p.retired === true,
+      id: String(p["id"]),
+      name: s(p["name"]) ?? "",
+      team: s(team["name"]),
+      teamId: team["id"] ? String(team["id"]) : null,
+      teamLogo: team["id"] ? `https://api.sofascore.app/api/v1/team/${team["id"]}/image` : null,
+      nationality: s(o(p.country)["name"]),
+      position: s(p["position"]),
+      retired: p["retired"] === true,
     };
   },
 };
@@ -137,14 +137,14 @@ export async function verifyCurrentClub(
       // ambiguous: two candidates with the same top score
       if (!best || (ranked[1] && ranked[1].score === best.score)) return { status: "unavailable" } as ClubVerification;
       const p = await provider.player(best.c.id);
-      if (!p || !p.team || p.retired || normName(p.name) !== normName(best.c.name)) {
+      if (!p || !p["team"] || p["retired"] || normName(p["name"]) !== normName(best.c.name)) {
         return { status: "unavailable" } as ClubVerification;
       }
-      const agrees = sameClub(p.team, q.club);
+      const agrees = sameClub(p["team"], q.club);
       const confidence: "high" | "medium" = best.score >= 0.7 || agrees ? "high" : "medium";
       const result: ClubVerification = {
         status: agrees ? "confirmed" : confidence === "high" ? "changed" : "conflict",
-        name: p.team,
+        name: p["team"],
         teamId: p.teamId,
         logo: p.teamLogo,
         source: provider.label,
