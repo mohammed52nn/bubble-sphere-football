@@ -176,12 +176,12 @@ export const wikidataProvider: ClubSourceProvider = {
       people.set(id, [...(people.get(id) ?? []), r]);
     }
     const candidates = [...people.entries()]
-      .map(([id, rs]) => ({ id, rs, name: v(rs[0], "pLabel") ?? "" }))
+      .map(([id, rs]) => ({ id, rs, name: v(rs[0]!, "pLabel") ?? "" }))
       .filter((c) => nameScore(c.name, q.latinName) > 0);
 
     // same-name disambiguation: DOB first, then club history
     let pick = candidates.length === 1 ? candidates[0] : undefined;
-    if (!pick && q.birthDate) pick = candidates.find((c) => v(c.rs[0], "dob")?.slice(0, 10) === q.birthDate);
+    if (!pick && q.birthDate) pick = candidates.find((c) => v(c.rs[0]!, "dob")?.slice(0, 10) === q.birthDate);
     if (!pick && q.club) {
       const byClub = candidates.filter((c) => c.rs.some((r) => sameClub(v(r, "teamLabel"), q.club)));
       if (byClub.length === 1) pick = byClub[0];
@@ -219,8 +219,8 @@ export const wikidataProvider: ClubSourceProvider = {
       club: current?.team ?? null,
       teamId: current?.teamId ?? null,
       logo: null,
-      birthDate: v(pick.rs[0], "dob")?.slice(0, 10) ?? null,
-      nationality: v(pick.rs[0], "countryLabel"),
+      birthDate: v(pick.rs[0]!, "dob")?.slice(0, 10) ?? null,
+      nationality: v(pick.rs[0]!, "countryLabel"),
       previousClub: previous?.team ?? null,
       since: current?.start ?? null,
       transferState,
