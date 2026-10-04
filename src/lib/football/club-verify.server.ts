@@ -298,7 +298,7 @@ async function runVerification(
 
   const valid: { p: ClubSourceProvider; obs: Observation; id: number }[] = [];
   settled.forEach((r, i) => {
-    const p = providers[i];
+    const p = providers[i]!;
     if (r.status === "rejected") {
       debug.sourcesChecked.push({ source: p.label, ok: false, club: null, note: String((r.reason as Error)?.message ?? "error") });
       return;
@@ -332,7 +332,7 @@ async function runVerification(
   }
   groups.sort((a, b) => b.weight - a.weight);
   const top = groups[0]!;
-  const contested = groups.length > 1 && groups[1].weight >= top.weight * 0.8;
+  const contested = groups.length > 1 && groups[1]!.weight >= top.weight * 0.8;
   const best = top.members.sort((a, b) => b.id - a.id)[0]!;
   debug.identityScore = best.id;
 
