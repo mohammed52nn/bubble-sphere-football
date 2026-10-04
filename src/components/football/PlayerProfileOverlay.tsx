@@ -3,7 +3,7 @@ import { ExternalLink, Globe, RotateCw, Share2, ShieldCheck, Users, X } from "lu
 import { toast } from "sonner";
 
 import { LoadingOrb } from "./LoadingOrb";
-import { useCurrentClubVerification } from "@/hooks/useCurrentClubVerification";
+import { isVerifyDebug, useCurrentClubVerification } from "@/hooks/useCurrentClubVerification";
 import { formatDate, initialsOf, relativeTime } from "@/lib/football/format";
 import { UNAVAILABLE, type PlayerProfile, type PlayerSeed } from "@/lib/football/types";
 
@@ -348,12 +348,18 @@ export function PlayerProfileOverlay({
                 {verifiedClub && verifiedClub.status !== "unavailable" && verifiedClub.status !== "conflict" && (
                   <>
                     <span aria-hidden>·</span>
-                    <span>
-                      ✓ تم التحقق من النادي ({verifiedClub.source}) {relativeTime(verifiedClub.verifiedAt)}
-                    </span>
+                    <span>✓ تم التحقق مؤخرًا</span>
                   </>
                 )}
               </p>
+              {isVerifyDebug() && verifiedClub && (
+                <pre
+                  className="glass-panel mt-3 max-h-64 overflow-auto rounded-lg p-3 text-[10px] text-muted-foreground"
+                  style={{ direction: "ltr" }}
+                >
+                  {JSON.stringify(verifiedClub, null, 2)}
+                </pre>
+              )}
             </>
           )}
         </div>
