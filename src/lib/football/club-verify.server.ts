@@ -331,9 +331,9 @@ async function runVerification(
     if (g) { g.members.push(v); g.weight += w; } else groups.push({ club: v.obs.club!, members: [v], weight: w });
   }
   groups.sort((a, b) => b.weight - a.weight);
-  const top = groups[0];
+  const top = groups[0]!;
   const contested = groups.length > 1 && groups[1].weight >= top.weight * 0.8;
-  const best = top.members.sort((a, b) => b.id - a.id)[0];
+  const best = top.members.sort((a, b) => b.id - a.id)[0]!;
   debug.identityScore = best.id;
 
   const agreesWithPrimary = sameClub(top.club, q.club);
