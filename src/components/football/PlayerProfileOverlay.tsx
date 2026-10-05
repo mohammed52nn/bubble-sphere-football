@@ -232,6 +232,59 @@ export function PlayerProfileOverlay({
                 <Field label="التقييم" value={profile.rating} />
               </dl>
 
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {editingClub ? (
+                  <form
+                    className="flex w-full flex-wrap items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveClub(clubDraft);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={clubDraft}
+                      onChange={(e) => setClubDraft(e.target.value)}
+                      placeholder="اسم النادي الصحيح"
+                      maxLength={120}
+                      className="glass-card min-w-0 flex-1 px-3 py-2 text-sm text-foreground outline-none"
+                    />
+                    <button type="submit" className="glass-card px-3 py-2 text-foreground">
+                      حفظ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingClub(false)}
+                      className="px-2 py-2 text-muted-foreground"
+                    >
+                      إلغاء
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClubDraft(manualClub ?? profile.club ?? "");
+                        setEditingClub(true);
+                      }}
+                      className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    >
+                      تصحيح النادي يدويًا
+                    </button>
+                    {manualClub && (
+                      <button
+                        type="button"
+                        onClick={() => saveClub(null)}
+                        className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      >
+                        إعادة النادي الأصلي
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
               {profile.bio && (
                 <Section title="نبذة">
                   <p className="glass-card px-4 py-3 text-sm leading-relaxed text-muted-foreground">
