@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Globe, RotateCw, Share2, ShieldCheck, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -62,6 +62,29 @@ export function PlayerProfileOverlay({
   const name = profile?.displayName ?? seed.displayName;
   const clubCheck = useCurrentClubVerification(profile);
   const verifiedClub = clubCheck.data;
+  const clubKey = `fb:club-override:${seed.latinName}`;
+  const [manualClub, setManualClub] = useState<string | null>(null);
+  const [editingClub, setEditingClub] = useState(false);
+  const [clubDraft, setClubDraft] = useState("");
+  useEffect(() => {
+    try {
+      setManualClub(window.localStorage.getItem(clubKey));
+    } catch {
+      setManualClub(null);
+    }
+  }, [clubKey]);
+  const saveClub = (value: string | null) => {
+    const v = value?.trim() || null;
+    try {
+      if (v) window.localStorage.setItem(clubKey, v);
+      else window.localStorage.removeItem(clubKey);
+    } catch {
+      /* storage unavailable */
+    }
+    setManualClub(v);
+    setEditingClub(false);
+    toast.success(v ? "تم حفظ النادي المصحّح." : "تمت إعادة النادي الأصلي.");
+  };
 
   const handleShare = useCallback(async () => {
     if (typeof navigator === "undefined") return;
@@ -190,9 +213,10 @@ export function PlayerProfileOverlay({
             <>
               <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Field
-                  label="النادي"
+                  label={manualClub ? "النادي (تصحيح يدوي)" : "النادي"}
                   value={
-                    verifiedClub?.status === "changed" ? verifiedClub.name : profile.club
+                    manualClub ??
+                    (verifiedClub?.status === "changed" ? verifiedClub.name : profile.club)
                   }
                 />
                 <Field label="المركز" value={profile.position} />
@@ -207,6 +231,59 @@ export function PlayerProfileOverlay({
                 <Field label="القيمة السوقية" value={profile.marketValue} />
                 <Field label="التقييم" value={profile.rating} />
               </dl>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {editingClub ? (
+                  <form
+                    className="flex w-full flex-wrap items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveClub(clubDraft);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={clubDraft}
+                      onChange={(e) => setClubDraft(e.target.value)}
+                      placeholder="اسم النادي الصحيح"
+                      maxLength={120}
+                      className="glass-card min-w-0 flex-1 px-3 py-2 text-sm text-foreground outline-none"
+                    />
+                    <button type="submit" className="glass-card px-3 py-2 text-foreground">
+                      حفظ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingClub(false)}
+                      className="px-2 py-2 text-muted-foreground"
+                    >
+                      إلغاء
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClubDraft(manualClub ?? profile.club ?? "");
+                        setEditingClub(true);
+                      }}
+                      className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    >
+                      تصحيح النادي يدويًا
+                    </button>
+                    {manualClub && (
+                      <button
+                        type="button"
+                        onClick={() => saveClub(null)}
+                        className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      >
+                        إعادة النادي الأصلي
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
 
               {profile.bio && (
                 <Section title="نبذة">
