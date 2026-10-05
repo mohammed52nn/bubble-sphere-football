@@ -27,6 +27,8 @@ export interface Observation {
   since: string | null; // ISO start date at current club, if known
   transferState: TransferState;
   retired: boolean;
+  /** News-derived proof (only for the news provider). */
+  evidence?: { outlets: number; lineup: boolean; official: boolean; headlines: string[] };
 }
 
 export interface Query {
@@ -229,7 +231,105 @@ export const wikidataProvider: ClubSourceProvider = {
   },
 };
 
-export const PROVIDERS: ClubSourceProvider[] = [sofascoreProvider, wikidataProvider];
+/**
+ * News intelligence — reads real recent headlines (transfers, official announcements,
+ * starting line-ups, social posts reported by the press) and lets the AI extract the
+ * club the player is *currently* playing for. Only evidence quoted in real headlines counts.
+ */
+const newsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["samePlayer", "currentClub", "previousClub", "transferState", "evidence"],
+  properties: {
+    samePlayer: { type: "boolean" },
+    currentClub: { type: "string" },
+    previousClub: { type: "string" },
+    transferState: { type: "string", enum: ["PERMANENT", "LOAN", "RETURN_FROM_LOAN", "FREE_AGENT", "RETIRED", "NEW_SIGNING", "UNKNOWN"] },
+    evidence: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["index", "kind"],
+        properties: {
+          index: { type: "number" },
+          kind: { type: "string", enum: ["lineup", "official", "transfer_done", "match_report", "social", "rumor"] },
+        },
+      },
+    },
+  },
+} as const;
+
+export const newsProvider: ClubSourceProvider = {
+  id: "news",
+  label: "أحدث الأخبار",
+  reliability: 0.7,
+  async observe(q) {
+    const { searchHeadlines } = await import("./news.server");
+    const { researchJson } = await import("./ai.server");
+    const n = `"${q.latinName}"`;
+    const lists = await Promise.allSettled([
+      searchHeadlines(`${n} (lineup OR "starting XI" OR "line-up") when:21d`, "en"),
+      searchHeadlines(`${n} (signs OR joins OR "completes move" OR transfer OR loan OR debut) when:60d`, "en"),
+      searchHeadlines(`${n} (تشكيلة OR انتقال OR ينضم OR رسميا) when:30d`, "ar"),
+    ]);
+    const seen = new Set<string>();
+    const articles = lists
+      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+      .filter((a) => (seen.has(a.sourceUrl) ? false : (seen.add(a.sourceUrl), true)))
+      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+      .slice(0, 24);
+    if (articles.length < 2) return null;
+
+    const ai = await researchJson<{
+      samePlayer: boolean; currentClub: string; previousClub: string;
+      transferState: TransferState; evidence: { index: number; kind: string }[];
+    }>({
+      system:
+        "You verify a footballer's CURRENT club from real news headlines only. Never use memory to invent a club. " +
+        "Newest evidence wins: a starting line-up, match report, or official announcement from the last weeks outranks older info. " +
+        "Rumors ('linked with', 'interest', 'could') are NOT evidence of a move. If headlines do not clearly show the current club, return currentClub \"\". " +
+        "Return the club name in English. Set samePlayer=false if headlines are about a different person with the same name.",
+      user: [
+        `Player: ${q.latinName}. Nationality: ${q.nationality ?? "?"}. Club on file: ${q.club ?? "?"}. Born: ${q.birthDate ?? "?"}. Today: ${new Date().toISOString().slice(0, 10)}.`,
+        "Headlines (index, date, source, title):",
+        ...articles.map((a, i) => `${i} | ${a.publishedAt?.slice(0, 10) ?? "?"} | ${a.source} | ${a.title}`),
+        "evidence: list ONLY headlines that directly show the player at currentClub, with their kind.",
+      ].join("\n"),
+      schemaName: "news_club",
+      schema: newsSchema,
+    });
+
+    const club = s(ai.currentClub);
+    if (!ai.samePlayer || !club) return null;
+    const strongKinds = new Set(["lineup", "official", "transfer_done", "match_report"]);
+    const proof = ai.evidence.filter((e) => articles[e.index] && strongKinds.has(e.kind));
+    const sources = new Set(proof.map((e) => articles[e.index]!.source));
+    if (sources.size < 2) return null; // need at least two independent outlets
+
+    return {
+      playerId: `news:${normName(q.latinName)}`,
+      name: q.latinName,
+      club,
+      teamId: null,
+      logo: null,
+      birthDate: null,
+      nationality: q.nationality,
+      previousClub: s(ai.previousClub) ?? q.club,
+      since: null,
+      transferState: ai.transferState ?? "UNKNOWN",
+      retired: ai.transferState === "RETIRED",
+      evidence: {
+        outlets: sources.size,
+        lineup: proof.some((e) => e.kind === "lineup" || e.kind === "match_report"),
+        official: proof.some((e) => e.kind === "official" || e.kind === "transfer_done"),
+        headlines: proof.slice(0, 4).map((e) => articles[e.index]!.title),
+      },
+    };
+  },
+};
+
+export const PROVIDERS: ClubSourceProvider[] = [sofascoreProvider, wikidataProvider, newsProvider];
 
 /* ---------------- identity + confidence ---------------- */
 
