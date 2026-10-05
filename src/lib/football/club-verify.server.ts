@@ -427,7 +427,10 @@ async function runVerification(
   const groups: { club: string; members: typeof valid; weight: number }[] = [];
   for (const v of valid) {
     const g = groups.find((x) => sameClub(x.club, v.obs.club));
-    const w = v.p.reliability * (v.id / 100);
+    // Fresh news proof (line-ups / official announcements from ≥2 outlets) outranks stale structured data.
+    const ev = v.obs.evidence;
+    const newsBoost = ev && (ev.lineup || ev.official) ? 0.6 + Math.min(ev.outlets, 5) * 0.1 : 0;
+    const w = v.p.reliability * (v.id / 100) + newsBoost;
     if (g) { g.members.push(v); g.weight += w; } else groups.push({ club: v.obs.club!, members: [v], weight: w });
   }
   groups.sort((a, b) => b.weight - a.weight);
@@ -435,19 +438,23 @@ async function runVerification(
   const contested = groups.length > 1 && groups[1]!.weight >= top.weight * 0.8;
   const best = top.members.sort((a, b) => b.id - a.id)[0]!;
   debug.identityScore = best.id;
+  const news = top.members.find((m) => m.obs.evidence)?.obs.evidence;
+  const newsStrong = !!news && (news.lineup || news.official) && news.outlets >= 2;
+  if (news) debug.reason = `news: ${news.outlets} outlets — ${news.headlines.join(" | ").slice(0, 300)}`;
 
   const agreesWithPrimary = sameClub(top.club, q.club);
   let score = best.id * 0.6 + best.p.reliability * 25;
   if (top.members.length > 1) score += 10; // independent agreement
   if (agreesWithPrimary) score += 10;
   if (best.obs.birthDate && best.obs.birthDate === q.birthDate) score += 5;
+  if (newsStrong) score += 15 + (news!.lineup && news!.official ? 10 : 0) + (news!.outlets >= 3 ? 5 : 0);
   if (contested) score -= 25;
   score = Math.max(0, Math.min(100, Math.round(score)));
   const level = levelOf(score);
 
   // Fail-safe update rule: change only when identity is strong, evidence high, and not contested.
   const dobConfirmed = !!q.birthDate && best.obs.birthDate === q.birthDate;
-  const strong = !contested && score >= 85 && (top.members.length > 1 || dobConfirmed);
+  const strong = !contested && score >= 85 && (top.members.length > 1 || dobConfirmed || newsStrong);
 
   let status: "confirmed" | "changed" | "conflict";
   let state: "AGREEMENT" | "VERIFIED" | "CONFLICT" | "RECENT_CHANGE" | "UNVERIFIED";
