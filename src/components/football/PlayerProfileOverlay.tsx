@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Globe, RotateCw, Share2, ShieldCheck, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -62,6 +62,29 @@ export function PlayerProfileOverlay({
   const name = profile?.displayName ?? seed.displayName;
   const clubCheck = useCurrentClubVerification(profile);
   const verifiedClub = clubCheck.data;
+  const clubKey = `fb:club-override:${seed.latinName}`;
+  const [manualClub, setManualClub] = useState<string | null>(null);
+  const [editingClub, setEditingClub] = useState(false);
+  const [clubDraft, setClubDraft] = useState("");
+  useEffect(() => {
+    try {
+      setManualClub(window.localStorage.getItem(clubKey));
+    } catch {
+      setManualClub(null);
+    }
+  }, [clubKey]);
+  const saveClub = (value: string | null) => {
+    const v = value?.trim() || null;
+    try {
+      if (v) window.localStorage.setItem(clubKey, v);
+      else window.localStorage.removeItem(clubKey);
+    } catch {
+      /* storage unavailable */
+    }
+    setManualClub(v);
+    setEditingClub(false);
+    toast.success(v ? "تم حفظ النادي المصحّح." : "تمت إعادة النادي الأصلي.");
+  };
 
   const handleShare = useCallback(async () => {
     if (typeof navigator === "undefined") return;
@@ -190,9 +213,10 @@ export function PlayerProfileOverlay({
             <>
               <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Field
-                  label="النادي"
+                  label={manualClub ? "النادي (تصحيح يدوي)" : "النادي"}
                   value={
-                    verifiedClub?.status === "changed" ? verifiedClub.name : profile.club
+                    manualClub ??
+                    (verifiedClub?.status === "changed" ? verifiedClub.name : profile.club)
                   }
                 />
                 <Field label="المركز" value={profile.position} />
