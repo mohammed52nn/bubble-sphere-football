@@ -361,7 +361,7 @@ export async function verifyCurrentClub(
   providers: ClubSourceProvider[] = PROVIDERS,
 ): Promise<ClubVerification> {
   const season = seasonOf();
-  const key = `club:v2:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}`;
+  const key = `club:v3:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}`;
   const lastKey = `${key}:last`;
   const ttl = (inTransferWindow() ? 2 : 12) * 60 * 60 * 1000;
 
