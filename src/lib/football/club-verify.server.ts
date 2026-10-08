@@ -467,7 +467,7 @@ async function runVerification(
   return {
     status,
     state,
-    name: top.club,
+    name: await arabicClubName(top.club),
     teamId: best.obs.teamId,
     logo: top.members.find((m) => m.obs.logo)?.obs.logo ?? null,
     source: top.members.map((m) => m.p.label).join(" + "),
@@ -482,4 +482,26 @@ async function runVerification(
     transferState: top.members.find((m) => m.obs.transferState !== "UNKNOWN")?.obs.transferState ?? "UNKNOWN",
     debug,
   };
+}
+
+/** Best-effort Arabic label for a club via Wikidata; falls back to the original name. */
+async function arabicClubName(name: string): Promise<string> {
+  if (!name || /[\u0600-\u06FF]/.test(name)) return name;
+  try {
+    const h = { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(4000) };
+    const r = await fetch(
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=1&search=${encodeURIComponent(name)}`,
+      h,
+    );
+    const id = ((await r.json()) as { search?: { id: string }[] }).search?.[0]?.id;
+    if (!id) return name;
+    const e = await fetch(
+      `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=labels&languages=ar&ids=${id}`,
+      { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(4000) },
+    );
+    const data = (await e.json()) as { entities?: Record<string, { labels?: { ar?: { value: string } } }> };
+    return data.entities?.[id]?.labels?.ar?.value || name;
+  } catch {
+    return name;
+  }
 }
