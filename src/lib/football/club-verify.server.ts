@@ -467,7 +467,7 @@ async function runVerification(
   return {
     status,
     state,
-    name: top.club,
+    name: await arabicClubName(top.club),
     teamId: best.obs.teamId,
     logo: top.members.find((m) => m.obs.logo)?.obs.logo ?? null,
     source: top.members.map((m) => m.p.label).join(" + "),
