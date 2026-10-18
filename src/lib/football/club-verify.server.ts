@@ -36,6 +36,7 @@ export interface Query {
   club: string | null;
   nationality: string | null;
   birthDate: string | null;
+  refresh?: boolean;
 }
 
 const UA = "FootballBubbles/1.0 (club verification; contact via app)";
@@ -269,9 +270,9 @@ export const newsProvider: ClubSourceProvider = {
     const { researchJson } = await import("./ai.server");
     const n = `"${q.latinName}"`;
     const lists = await Promise.allSettled([
-      searchHeadlines(`${n} (lineup OR "starting XI" OR "line-up") when:21d`, "en"),
-      searchHeadlines(`${n} (signs OR joins OR "completes move" OR transfer OR loan OR debut) when:60d`, "en"),
-      searchHeadlines(`${n} (تشكيلة OR انتقال OR ينضم OR رسميا) when:30d`, "ar"),
+      searchHeadlines(`${n} (lineup OR "starting XI" OR "line-up") when:21d`, "en", q.refresh),
+      searchHeadlines(`${n} (signs OR joins OR "completes move" OR transfer OR loan OR debut) when:60d`, "en", q.refresh),
+      searchHeadlines(`${n} (تشكيلة OR انتقال OR ينضم OR رسميا) when:30d`, "ar", q.refresh),
     ]);
     const seen = new Set<string>();
     const articles = lists
@@ -361,13 +362,17 @@ export async function verifyCurrentClub(
   providers: ClubSourceProvider[] = PROVIDERS,
 ): Promise<ClubVerification> {
   const season = seasonOf();
-  const key = `club:v3:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}`;
+  const key = `club:v4:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}:${normalizeClub(q.club)}:${q.nationality ?? ""}`;
   const lastKey = `${key}:last`;
   const ttl = (inTransferWindow() ? 2 : 12) * 60 * 60 * 1000;
 
-  const wasCached = cacheGet<ClubVerification>(key) !== null;
+  const wasCached = !q.refresh && cacheGet<ClubVerification>(key) !== null;
   try {
-    const result = await cached(key, ttl, () => runVerification(q, providers, season));
+    const result = await cached(key, ttl, () => runVerification(q, providers, season), q.refresh);
+    if (result.status === "unavailable") {
+      const last = cacheGet<ClubVerification>(lastKey);
+      if (last && last.status !== "unavailable") return withCache({ ...last, state: "STALE" }, "stale");
+    }
     if (result.status !== "unavailable") cacheSet(lastKey, result, 7 * 86400000);
     return withCache(result, wasCached ? "cached" : "fresh");
   } catch {

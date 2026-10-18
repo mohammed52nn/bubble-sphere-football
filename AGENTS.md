@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Profile club verification bypasses result and headline cache reads on opening while sharing concurrent requests; keep existing profile data and manual overrides visible so freshness never blocks rendering.

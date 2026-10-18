@@ -66,6 +66,8 @@ export function PlayerProfileOverlay({
   const [manualClub, setManualClub] = useState<string | null>(null);
   const [editingClub, setEditingClub] = useState(false);
   const [clubDraft, setClubDraft] = useState("");
+  const displayedClub = manualClub ??
+    (verifiedClub?.status === "changed" ? verifiedClub.name : profile?.club ?? seed.club);
   useEffect(() => {
     try {
       setManualClub(window.localStorage.getItem(clubKey));
@@ -194,7 +196,7 @@ export function PlayerProfileOverlay({
                 {profile?.latinName ?? seed.latinName}
               </p>
               <p className="mt-1 truncate text-xs text-silver/90">
-                {[profile?.club ?? seed.club, profile?.position ?? seed.position]
+                {[displayedClub, profile?.position ?? seed.position]
                   .filter(Boolean)
                   .join(" · ") || "غير متوفر"}
               </p>
@@ -214,10 +216,7 @@ export function PlayerProfileOverlay({
               <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Field
                   label={manualClub ? "النادي (تصحيح يدوي)" : "النادي"}
-                  value={
-                    manualClub ??
-                    (verifiedClub?.status === "changed" ? verifiedClub.name : profile.club)
-                  }
+                  value={displayedClub}
                 />
                 <Field label="المركز" value={profile.position} />
                 <Field label="الجنسية" value={profile.nationality} />
