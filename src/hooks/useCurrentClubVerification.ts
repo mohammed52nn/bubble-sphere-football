@@ -10,21 +10,24 @@ export function isVerifyDebug() {
 /** Background, fail-silent current-club check. Runs only after the profile has rendered. */
 export function useCurrentClubVerification(profile: PlayerProfile | null) {
   return useQuery({
-    queryKey: ["club-verify", profile?.latinName, profile?.birthDate],
+    queryKey: ["club-verify", profile?.latinName, profile?.birthDate, profile?.club, profile?.nationality],
     enabled: !!profile,
     staleTime: 30 * 60 * 1000,
+    refetchOnMount: "always",
     gcTime: 60 * 60 * 1000,
     retry: 0,
     refetchOnWindowFocus: false,
     queryFn: async () => {
+      if (!profile) return { status: "unavailable" as const };
       try {
         return await verifyPlayerClub({
           data: {
-            latinName: profile!.latinName,
-            club: profile!.club,
-            nationality: profile!.nationality,
-            birthDate: profile!.birthDate,
+            latinName: profile.latinName,
+            club: profile.club,
+            nationality: profile.nationality,
+            birthDate: profile.birthDate,
             debug: isVerifyDebug(),
+            refresh: true,
           },
         });
       } catch {

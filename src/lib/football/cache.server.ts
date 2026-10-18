@@ -19,8 +19,8 @@ export function cacheSet(key: string, value: unknown, ttlMs: number) {
 }
 
 /** Cached + de-duplicated async work: identical concurrent calls share one request. */
-export async function cached<T>(key: string, ttlMs: number, work: () => Promise<T>): Promise<T> {
-  const hit = cacheGet<T>(key);
+export async function cached<T>(key: string, ttlMs: number, work: () => Promise<T>, refresh = false): Promise<T> {
+  const hit = refresh ? null : cacheGet<T>(key);
   if (hit !== null) return hit;
   const running = inflight.get(key);
   if (running) return running as Promise<T>;

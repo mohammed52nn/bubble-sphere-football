@@ -80,7 +80,7 @@ async function gdelt(query: string): Promise<RawArticle[]> {
 }
 
 /** Raw Google News search (query passed as-is, supports OR / when:30d). */
-export async function searchHeadlines(rawQuery: string, lang: "ar" | "en"): Promise<RawArticle[]> {
+export async function searchHeadlines(rawQuery: string, lang: "ar" | "en", refresh = false): Promise<RawArticle[]> {
   return cached<RawArticle[]>(`hl:${lang}:${rawQuery}`, 20 * 60 * 1000, async () => {
     const params = lang === "ar" ? "hl=ar&gl=EG&ceid=EG:ar" : "hl=en-GB&gl=GB&ceid=GB:en";
     const res = await fetch(
@@ -101,7 +101,7 @@ export async function searchHeadlines(rawQuery: string, lang: "ar" | "en"): Prom
         return { title, source, sourceUrl: link, publishedAt: date ? new Date(date).toISOString() : null };
       })
       .filter((a): a is RawArticle => a !== null);
-  });
+  }, refresh);
 }
 
 /** Real headlines only — Google News (Arabic then English), GDELT as fallback. */
