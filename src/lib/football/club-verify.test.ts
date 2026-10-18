@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { afterEach, expect, test } from "bun:test";
 import { cacheDrop, cached } from "./cache.server";
 import { verifyCurrentClub, type ClubSourceProvider, type Query } from "./club-verify.server";
