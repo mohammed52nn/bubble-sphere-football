@@ -12,3 +12,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://bubble-sphere-football.lovable.app/sitemap.xml

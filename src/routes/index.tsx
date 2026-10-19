@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,7 +15,7 @@ import type { PlayerSeed } from "@/lib/football/types";
 
 const TITLE = "فقاعات كرة القدم — اكتشف اللاعبين";
 const DESCRIPTION =
-  "تجربة عربية ذكية لاكتشاف عالم كرة القدم من خلال اللاعبين: فقاعات عائمة، ملفات موثوقة، وأخبار حديثة بمصادرها.";
+  "اكتشف لاعبي كرة القدم عبر فقاعات تفاعلية: ابحث باسم لاعب أو نادٍ أو دوري، وافتح ملفات عربية بالمسيرة والإنجازات والنادي الحالي وأحدث الأخبار بمصادرها.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,8 +25,10 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: TITLE },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://bubble-sphere-football.lovable.app/" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://bubble-sphere-football.lovable.app/" }],
   }),
   component: Index,
 });
@@ -151,9 +153,20 @@ function Index() {
       />
 
 
-      <p className="pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-[11px] text-muted-foreground">
+      <p className="text-center text-[11px] text-muted-foreground">
         اضغط على أي فقاعة لعرض ملف اللاعب — لن تتغير الفقاعات أثناء القراءة.
       </p>
+
+      <section className="glass-card relative mx-auto mt-6 mb-[max(1rem,env(safe-area-inset-bottom))] max-w-xl px-5 py-5 text-sm leading-relaxed text-muted-foreground">
+        <h2 className="mb-2 text-base font-semibold text-foreground">كيف تكتشف اللاعبين؟</h2>
+        <p>
+          تعرض الفقاعات مجموعة من لاعبي كرة القدم تتجدد كل فترة. ابحث باسم لاعب أو نادٍ أو دوري، ثم افتح ملف أي لاعب
+          لتجد نبذة عربية ومسيرته وإنجازاته وناديه الحالي المُتحقَّق منه وأحدث الأخبار بمصادرها.
+        </p>
+        <Link to="/players" className="mt-3 inline-block font-medium text-primary">
+          تعرّف على ملفات لاعبين كرة القدم ←
+        </Link>
+      </section>
 
       {active && (
         <PlayerProfileOverlay
