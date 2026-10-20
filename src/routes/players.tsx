@@ -34,6 +34,13 @@ export const Route = createFileRoute("/players")({
 });
 
 const PARALLEL = 4;
+let running = 0;
+const waiting: (() => void)[] = [];
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  if (running >= PARALLEL) await new Promise<void>((r) => waiting.push(r));
+  running++;
+  try { return await fn(); } finally { running--; waiting.shift()?.(); }
+}
 
 function seedOf(p: { latinName: string; displayName: string }): PlayerSeed {
   return {
@@ -47,25 +54,20 @@ function PlayersPage() {
   const [active, setActive] = useState<PlayerSeed | null>(null);
 
   const checks = useQueries({
-    queries: ROSTER.map((p, i) => ({
+    queries: ROSTER.map((p) => ({
       queryKey: ["hall-club", p.latinName],
       staleTime: 30 * 60 * 1000,
       retry: 0,
       refetchOnWindowFocus: false,
-      enabled: true as boolean,
       queryFn: async (): Promise<ClubVerification> => {
         try {
-          return await verifyPlayerClub({ data: { latinName: p.latinName, club: null, nationality: null, birthDate: null } });
+          return await limited(() => verifyPlayerClub({ data: { latinName: p.latinName, club: null, nationality: null, birthDate: null } }));
         } catch {
           return { status: "unavailable" };
         }
       },
-      _i: i,
     })),
   });
-  // Throttle: only the first (settled + PARALLEL) players are allowed to run.
-  const settled = checks.filter((c) => c.data).length;
-  void settled;
 
   const list = useMemo(() => {
     const f = filter.trim().toLowerCase();

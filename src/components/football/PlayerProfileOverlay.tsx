@@ -284,6 +284,21 @@ export function PlayerProfileOverlay({
                 )}
               </div>
 
+              {verifiedClub && verifiedClub.status !== "unavailable" && (verifiedClub.evidence?.length ?? 0) > 0 && (
+                <Section title="لماذا هذا النادي؟">
+                  <ul className="space-y-1.5">
+                    {verifiedClub.evidence!.slice(0, 4).map((e) => (
+                      <li key={e.url}>
+                        <a href={e.url} target="_blank" rel="noopener noreferrer" className="glass-panel flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
+                          <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                          <span>{e.kind === "lineup" ? "تشكيلة: " : e.kind === "official" ? "رسمي: " : "انتقال: "}{e.title} — {e.source}{e.publishedAt ? ` · ${relativeTime(e.publishedAt)}` : ""}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
+              )}
+
               {profile.bio && (
                 <Section title="نبذة">
                   <p className="glass-card px-4 py-3 text-sm leading-relaxed text-muted-foreground">
