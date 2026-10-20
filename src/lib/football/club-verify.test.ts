@@ -47,3 +47,27 @@ test("fresh cache reads bypass TTL while concurrent requests share work", async 
   expect(calls).toBe(1);
   expect(await cached("hl:test", 120000, async () => "unexpected")).toBe("fresh headlines");
 });
+function newsObs(lineupConfirmed: boolean, outlets = 2) {
+  return {
+    playerId: "n", name: "Test Striker", club: "النادي الجديد", teamId: null, logo: null,
+    birthDate: null, nationality: null, previousClub: "النادي القديم", since: null,
+    transferState: "PERMANENT" as const, retired: false,
+    evidence: { outlets, lineup: false, official: true, headlines: ["x"], lineupConfirmed,
+      items: [{ title: "x", url: "https://a", source: "A", publishedAt: null, kind: "official" as const }] },
+  };
+}
+const nq: Query = { latinName: "Test Striker", club: "النادي القديم", nationality: null, birthDate: null, refresh: true };
+
+test("news + club line-up naming the player changes the club and is confirmed today", async () => {
+  const r = await verifyCurrentClub(nq, [{ id: "news", label: "news", reliability: 0.7, observe: async () => newsObs(true) }]);
+  expect(r.status).toBe("changed");
+  if (r.status === "unavailable") throw new Error();
+  expect(r.name).toBe("النادي الجديد");
+  expect(r.proof).toBe("confirmed_today");
+  expect(r.evidence?.length).toBe(1);
+});
+
+test("news without a line-up does not change the club", async () => {
+  const r = await verifyCurrentClub({ ...nq, latinName: "Test Striker" }, [{ id: "news", label: "news", reliability: 0.7, observe: async () => newsObs(false) }]);
+  expect(r.status === "unavailable" || !r.changed).toBe(true);
+});

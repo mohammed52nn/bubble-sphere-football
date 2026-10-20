@@ -1,6 +1,7 @@
 import { cached, cacheGet, cacheSet } from "./cache.server";
 import type {
   ClubVerification,
+  EvidenceItem,
   ConfidenceLevel,
   TransferState,
   VerificationDebug,
@@ -28,7 +29,15 @@ export interface Observation {
   transferState: TransferState;
   retired: boolean;
   /** News-derived proof (only for the news provider). */
-  evidence?: { outlets: number; lineup: boolean; official: boolean; headlines: string[] };
+  evidence?: {
+    outlets: number;
+    lineup: boolean;
+    official: boolean;
+    headlines: string[];
+    /** Step 2: player named in a recent line-up headline of the candidate club. */
+    lineupConfirmed: boolean;
+    items: EvidenceItem[];
+  };
 }
 
 export interface Query {
@@ -308,6 +317,30 @@ export const newsProvider: ClubSourceProvider = {
     const sources = new Set(proof.map((e) => articles[e.index]!.source));
     if (sources.size < 2) return null; // need at least two independent outlets
 
+    // Step 2 — line-up check: look for recent line-up headlines of the candidate club
+    // that literally name the player (surname match), from at least one outlet.
+    const surname = normName(q.latinName).split(" ").pop() ?? "";
+    const lineupLists = await Promise.allSettled([
+      searchHeadlines(`"${club}" (lineup OR "starting XI" OR "line-up" OR "team news") when:21d`, "en", q.refresh),
+      searchHeadlines(`تشكيلة "${club}" when:21d`, "ar", q.refresh),
+    ]);
+    const lineupHits = lineupLists
+      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+      .filter((a) => surname.length > 2 && normName(a.title).includes(surname))
+      .filter((a) => /lineup|line-up|starting|xi|team news|تشكيل/i.test(a.title));
+    const kindOf = (k: string): EvidenceItem["kind"] =>
+      k === "lineup" || k === "match_report" ? "lineup" : k === "official" ? "official" : "transfer";
+    const items: EvidenceItem[] = [
+      ...proof.slice(0, 3).map((e) => {
+        const a = articles[e.index]!;
+        return { title: a.title, url: a.sourceUrl, source: a.source, publishedAt: a.publishedAt, kind: kindOf(e.kind) };
+      }),
+      ...lineupHits
+        .filter((a) => !articles.some((x) => x.sourceUrl === a.sourceUrl))
+        .slice(0, 2)
+        .map((a) => ({ title: a.title, url: a.sourceUrl, source: a.source, publishedAt: a.publishedAt, kind: "lineup" as const })),
+    ];
+
     return {
       playerId: `news:${normName(q.latinName)}`,
       name: q.latinName,
@@ -325,6 +358,8 @@ export const newsProvider: ClubSourceProvider = {
         lineup: proof.some((e) => e.kind === "lineup" || e.kind === "match_report"),
         official: proof.some((e) => e.kind === "official" || e.kind === "transfer_done"),
         headlines: proof.slice(0, 4).map((e) => articles[e.index]!.title),
+        lineupConfirmed: lineupHits.length > 0,
+        items,
       },
     };
   },
@@ -344,6 +379,7 @@ function identityScore(obs: Observation, q: Query): number {
   }
   if (q.nationality && obs.nationality && normName(obs.nationality) === normName(q.nationality)) score += 10;
   if (q.club && (sameClub(obs.club, q.club) || sameClub(obs.previousClub, q.club))) score += 15;
+  if (obs.evidence?.lineupConfirmed) score += 20; // named in the club's own recent line-up
   return Math.min(100, score);
 }
 
@@ -362,7 +398,7 @@ export async function verifyCurrentClub(
   providers: ClubSourceProvider[] = PROVIDERS,
 ): Promise<ClubVerification> {
   const season = seasonOf();
-  const key = `club:v4:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}:${normalizeClub(q.club)}:${q.nationality ?? ""}`;
+  const key = `club:v5:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}:${normalizeClub(q.club)}:${q.nationality ?? ""}`;
   const lastKey = `${key}:last`;
   const ttl = (inTransferWindow() ? 2 : 12) * 60 * 60 * 1000;
 
@@ -453,6 +489,7 @@ async function runVerification(
   if (agreesWithPrimary) score += 10;
   if (best.obs.birthDate && best.obs.birthDate === q.birthDate) score += 5;
   if (newsStrong) score += 15 + (news!.lineup && news!.official ? 10 : 0) + (news!.outlets >= 3 ? 5 : 0);
+  if (news?.lineupConfirmed) score += 15;
   if (contested) score -= 25;
   score = Math.max(0, Math.min(100, Math.round(score)));
   const level = levelOf(score);
@@ -485,6 +522,8 @@ async function runVerification(
     changed: status === "changed",
     changeDetectedAt: status === "changed" ? now : null,
     transferState: top.members.find((m) => m.obs.transferState !== "UNKNOWN")?.obs.transferState ?? "UNKNOWN",
+    evidence: news?.items ?? [],
+    proof: proofOf(status, newsStrong, !!news?.lineupConfirmed, !!news),
     debug,
   };
 }
@@ -509,4 +548,16 @@ async function arabicClubName(name: string): Promise<string> {
   } catch {
     return name;
   }
+}
+
+/** Two-step proof: news (transfer/official/line-up) + the club's own line-up naming the player. */
+export function proofOf(
+  status: "confirmed" | "changed" | "conflict",
+  newsStrong: boolean,
+  lineupConfirmed: boolean,
+  hasNews: boolean,
+): "confirmed_today" | "likely" | "none" {
+  if (status !== "conflict" && newsStrong && lineupConfirmed) return "confirmed_today";
+  if (hasNews || lineupConfirmed) return "likely";
+  return "none";
 }

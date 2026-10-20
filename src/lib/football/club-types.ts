@@ -44,5 +44,15 @@ export type ClubVerification =
       changed: boolean;
       changeDetectedAt: string | null;
       transferState: TransferState;
+      evidence?: EvidenceItem[];
+      proof?: "confirmed_today" | "likely" | "none";
       debug?: VerificationDebug;
     };
+
+export interface EvidenceItem {
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string | null;
+  kind: "transfer" | "lineup" | "official";
+}
