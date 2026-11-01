@@ -531,10 +531,27 @@ async function runVerification(
     changed: status === "changed",
     changeDetectedAt: status === "changed" ? now : null,
     transferState: top.members.find((m) => m.obs.transferState !== "UNKNOWN")?.obs.transferState ?? "UNKNOWN",
-    evidence: news?.items ?? [],
+    evidence: [...(news?.items ?? []), ...recordEvidence(top.members)],
     proof: proofOf(status, newsStrong, !!news?.lineupConfirmed, !!news),
     debug,
   };
+}
+
+/** Structured-database records backing the chosen club, so "why this club" is never empty. */
+function recordEvidence(members: { p: ClubSourceProvider; obs: Observation }[]): EvidenceItem[] {
+  const out: EvidenceItem[] = [];
+  for (const { p, obs } of members) {
+    if (obs.evidence || !obs.club) continue;
+    const url =
+      p.id === "wikidata" ? `https://www.wikidata.org/wiki/${obs.playerId}`
+      : p.id === "sofascore" ? `https://www.sofascore.com/player/p/${obs.playerId}`
+      : null;
+    if (!url) continue;
+    const since = obs.since ? ` منذ ${obs.since.slice(0, 10)}` : "";
+    const loan = obs.transferState === "LOAN" ? " (إعارة)" : "";
+    out.push({ title: `${obs.club}${loan}${since}`, url, source: p.label, publishedAt: null, kind: "record" });
+  }
+  return out;
 }
 
 /** Best-effort Arabic label for a club via Wikidata; falls back to the original name. */
