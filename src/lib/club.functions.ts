@@ -15,6 +15,7 @@ const input = z.object({
     .transform((v) => (v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null)),
   debug: z.boolean().default(false),
   refresh: z.boolean().default(false),
+  deep: z.boolean().default(false),
 });
 
 export const verifyPlayerClub = createServerFn({ method: "POST" })

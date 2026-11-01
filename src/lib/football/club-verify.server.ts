@@ -46,6 +46,8 @@ export interface Query {
   nationality: string | null;
   birthDate: string | null;
   refresh?: boolean;
+  /** Manual "تحديث": wider news windows + official club channels. */
+  deep?: boolean;
 }
 
 const UA = "FootballBubbles/1.0 (club verification; contact via app)";
@@ -282,13 +284,20 @@ export const newsProvider: ClubSourceProvider = {
       searchHeadlines(`${n} (lineup OR "starting XI" OR "line-up") when:21d`, "en", q.refresh),
       searchHeadlines(`${n} (signs OR joins OR "completes move" OR transfer OR loan OR debut) when:60d`, "en", q.refresh),
       searchHeadlines(`${n} (تشكيلة OR انتقال OR ينضم OR رسميا) when:30d`, "ar", q.refresh),
+      ...(q.deep
+        ? [
+            searchHeadlines(`${n} (official OR unveiled OR "here we go" OR announces OR presented) when:120d`, "en", true),
+            searchHeadlines(`${n} (goal OR scores OR "man of the match" OR assist) when:14d`, "en", true),
+            searchHeadlines(`${n} (يوقع OR تعاقد OR صفقة OR هدف OR يسجل) when:90d`, "ar", true),
+          ]
+        : []),
     ]);
     const seen = new Set<string>();
     const articles = lists
       .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
       .filter((a) => (seen.has(a.sourceUrl) ? false : (seen.add(a.sourceUrl), true)))
       .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
-      .slice(0, 24);
+      .slice(0, q.deep ? 36 : 24);
     if (articles.length < 2) return null;
 
     const ai = await researchJson<{
@@ -315,7 +324,7 @@ export const newsProvider: ClubSourceProvider = {
     const strongKinds = new Set(["lineup", "official", "transfer_done", "match_report"]);
     const proof = ai.evidence.filter((e) => articles[e.index] && strongKinds.has(e.kind));
     const sources = new Set(proof.map((e) => articles[e.index]!.source));
-    if (sources.size < 2) return null; // need at least two independent outlets
+    if (sources.size < 1) return null; // ≥2 independent outlets are still required to change a club (newsStrong)
 
     // Step 2 — line-up check: look for recent line-up headlines of the candidate club
     // that literally name the player (surname match), from at least one outlet.
@@ -522,10 +531,27 @@ async function runVerification(
     changed: status === "changed",
     changeDetectedAt: status === "changed" ? now : null,
     transferState: top.members.find((m) => m.obs.transferState !== "UNKNOWN")?.obs.transferState ?? "UNKNOWN",
-    evidence: news?.items ?? [],
+    evidence: [...(news?.items ?? []), ...recordEvidence(top.members)],
     proof: proofOf(status, newsStrong, !!news?.lineupConfirmed, !!news),
     debug,
   };
+}
+
+/** Structured-database records backing the chosen club, so "why this club" is never empty. */
+function recordEvidence(members: { p: ClubSourceProvider; obs: Observation }[]): EvidenceItem[] {
+  const out: EvidenceItem[] = [];
+  for (const { p, obs } of members) {
+    if (obs.evidence || !obs.club) continue;
+    const url =
+      p.id === "wikidata" ? `https://www.wikidata.org/wiki/${obs.playerId}`
+      : p.id === "sofascore" ? `https://www.sofascore.com/player/p/${obs.playerId}`
+      : null;
+    if (!url) continue;
+    const since = obs.since ? ` منذ ${obs.since.slice(0, 10)}` : "";
+    const loan = obs.transferState === "LOAN" ? " (إعارة)" : "";
+    out.push({ title: `${obs.club}${loan}${since}`, url, source: p.label, publishedAt: null, kind: "record" });
+  }
+  return out;
 }
 
 /** Best-effort Arabic label for a club via Wikidata; falls back to the original name. */
