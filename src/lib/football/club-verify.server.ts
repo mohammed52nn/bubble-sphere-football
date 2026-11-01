@@ -297,7 +297,7 @@ export const newsProvider: ClubSourceProvider = {
       .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
       .filter((a) => (seen.has(a.sourceUrl) ? false : (seen.add(a.sourceUrl), true)))
       .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
-      .slice(0, 24);
+      .slice(0, q.deep ? 36 : 24);
     if (articles.length < 2) return null;
 
     const ai = await researchJson<{
@@ -324,7 +324,7 @@ export const newsProvider: ClubSourceProvider = {
     const strongKinds = new Set(["lineup", "official", "transfer_done", "match_report"]);
     const proof = ai.evidence.filter((e) => articles[e.index] && strongKinds.has(e.kind));
     const sources = new Set(proof.map((e) => articles[e.index]!.source));
-    if (sources.size < 2) return null; // need at least two independent outlets
+    if (sources.size < 1) return null; // ≥2 independent outlets are still required to change a club (newsStrong)
 
     // Step 2 — line-up check: look for recent line-up headlines of the candidate club
     // that literally name the player (surname match), from at least one outlet.
