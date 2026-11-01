@@ -532,19 +532,28 @@ async function runVerification(
 async function arabicClubName(name: string): Promise<string> {
   if (!name || /[\u0600-\u06FF]/.test(name)) return name;
   try {
-    const h = { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(4000) };
-    const r = await fetch(
-      `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=1&search=${encodeURIComponent(name)}`,
-      h,
-    );
-    const id = ((await r.json()) as { search?: { id: string }[] }).search?.[0]?.id;
-    if (!id) return name;
-    const e = await fetch(
-      `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=labels&languages=ar&ids=${id}`,
-      { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(4000) },
-    );
-    const data = (await e.json()) as { entities?: Record<string, { labels?: { ar?: { value: string } } }> };
-    return data.entities?.[id]?.labels?.ar?.value || name;
+    return await cached(`club-ar:v2:${name.toLowerCase()}`, 7 * 24 * 3600 * 1000, async () => {
+      const h = { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(5000) };
+      const r = await fetch(
+        `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=7&search=${encodeURIComponent(name)}`,
+        h,
+      );
+      const hits = ((await r.json()) as { search?: { id: string; description?: string }[] }).search ?? [];
+      if (!hits.length) return name;
+      // Prefer the football club entry over a city/person/stadium with the same name.
+      const clubHits = hits.filter((s) => /football|soccer|club|team/i.test(s.description ?? ""));
+      const ids = (clubHits.length ? clubHits : hits).slice(0, 3).map((s) => s.id);
+      const e = await fetch(
+        `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=labels&languages=ar&ids=${ids.join("|")}`,
+        { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(5000) },
+      );
+      const data = (await e.json()) as { entities?: Record<string, { labels?: { ar?: { value: string } } }> };
+      for (const id of ids) {
+        const ar = data.entities?.[id]?.labels?.ar?.value;
+        if (ar) return ar;
+      }
+      return name;
+    }); // network errors throw, so failures are never cached
   } catch {
     return name;
   }

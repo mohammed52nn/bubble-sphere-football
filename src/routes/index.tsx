@@ -11,6 +11,7 @@ import { useBubbleField } from "@/hooks/useBubbleField";
 import { useOnline } from "@/hooks/useSmartProgress";
 import { discoverPlayers, getPlayerProfile } from "@/lib/football.functions";
 import type { PlayerSeed } from "@/lib/football/types";
+import { rememberPlayers } from "@/lib/football/seen-players";
 
 
 const TITLE = "فقاعات كرة القدم — اكتشف اللاعبين";
@@ -66,7 +67,10 @@ function Index() {
 
   const players = discovery.data?.players;
   useEffect(() => {
-    if (players && players.length > 0) reset(players);
+    if (players && players.length > 0) {
+      reset(players);
+      rememberPlayers(players);
+    }
   }, [players, reset]);
 
   useEffect(() => {
