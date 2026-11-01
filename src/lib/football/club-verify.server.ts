@@ -531,8 +531,8 @@ async function runVerification(
 /** Best-effort Arabic label for a club via Wikidata; falls back to the original name. */
 async function arabicClubName(name: string): Promise<string> {
   if (!name || /[\u0600-\u06FF]/.test(name)) return name;
-  return cached(`club-ar:v2:${name.toLowerCase()}`, 7 * 24 * 3600 * 1000, async () => {
-    try {
+  try {
+    return await cached(`club-ar:v2:${name.toLowerCase()}`, 7 * 24 * 3600 * 1000, async () => {
       const h = { headers: { "User-Agent": "FootballBubbles/1.0" }, signal: AbortSignal.timeout(5000) };
       const r = await fetch(
         `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=7&search=${encodeURIComponent(name)}`,
@@ -553,10 +553,10 @@ async function arabicClubName(name: string): Promise<string> {
         if (ar) return ar;
       }
       return name;
-    } catch {
-      return name;
-    }
-  });
+    }); // network errors throw, so failures are never cached
+  } catch {
+    return name;
+  }
 }
 
 /** Two-step proof: news (transfer/official/line-up) + the club's own line-up naming the player. */
