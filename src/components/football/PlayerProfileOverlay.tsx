@@ -156,6 +156,10 @@ export function PlayerProfileOverlay({
               onClick={(event) => {
                 event.stopPropagation();
                 onRefresh();
+                toast.info("نتحقق الآن من نادي اللاعب في الأخبار والتشكيلات الرسمية...");
+                void clubCheck.refetch().then((r) => {
+                  if (r.data?.status === "changed") toast.success(`النادي الحالي: ${r.data.name}`);
+                });
               }}
               disabled={refreshing || loading}
               className="glass-panel flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium text-foreground disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
