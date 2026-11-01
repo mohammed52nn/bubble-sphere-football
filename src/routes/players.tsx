@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { readSeenPlayers } from "@/lib/football/seen-players";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { ExternalLink, Search, ShieldCheck } from "lucide-react";
@@ -42,26 +43,38 @@ async function limited<T>(fn: () => Promise<T>): Promise<T> {
   try { return await fn(); } finally { running--; waiting.shift()?.(); }
 }
 
-function seedOf(p: { latinName: string; displayName: string }): PlayerSeed {
+type HallPlayer = { latinName: string; displayName: string; club: string | null };
+
+function seedOf(p: HallPlayer): PlayerSeed {
   return {
-    id: p.latinName, displayName: p.displayName, latinName: p.latinName, club: null, nationality: null,
+    id: p.latinName, displayName: p.displayName, latinName: p.latinName, club: p.club, nationality: null,
     position: null, fame: "known", reason: null, image: null, imageSource: null, imageKind: "fallback", hasNews: false,
   };
 }
 
+const BASE: HallPlayer[] = ROSTER.map((p) => ({ ...p, club: null }));
+
 function PlayersPage() {
   const [filter, setFilter] = useState("");
   const [active, setActive] = useState<PlayerSeed | null>(null);
+  const [hall, setHall] = useState<HallPlayer[]>(BASE);
+
+  // Add players seen in this device's bubbles (read after hydration).
+  useEffect(() => {
+    const known = new Set(BASE.map((p) => p.latinName.toLowerCase()));
+    const extra = readSeenPlayers().filter((p) => !known.has(p.latinName.toLowerCase()));
+    if (extra.length) setHall([...extra, ...BASE]);
+  }, []);
 
   const checks = useQueries({
-    queries: ROSTER.map((p) => ({
-      queryKey: ["hall-club", p.latinName],
+    queries: hall.map((p) => ({
+      queryKey: ["hall-club", p.latinName, p.club],
       staleTime: 30 * 60 * 1000,
       retry: 0,
       refetchOnWindowFocus: false,
       queryFn: async (): Promise<ClubVerification> => {
         try {
-          return await limited(() => verifyPlayerClub({ data: { latinName: p.latinName, club: null, nationality: null, birthDate: null } }));
+          return await limited(() => verifyPlayerClub({ data: { latinName: p.latinName, club: p.club, nationality: null, birthDate: null } }));
         } catch {
           return { status: "unavailable" };
         }
@@ -71,10 +84,10 @@ function PlayersPage() {
 
   const list = useMemo(() => {
     const f = filter.trim().toLowerCase();
-    return ROSTER.map((p, i) => ({ p, c: checks[i]! })).filter(
-      ({ p }) => !f || p.displayName.includes(f) || p.latinName.toLowerCase().includes(f),
+    return hall.map((p, i) => ({ p, c: checks[i]! })).filter(
+      ({ p, c }) => c && (!f || p.displayName.includes(f) || p.latinName.toLowerCase().includes(f)),
     );
-  }, [filter, checks]);
+  }, [filter, checks, hall]);
 
   const profile = useQuery({
     queryKey: ["profile", active?.latinName],
