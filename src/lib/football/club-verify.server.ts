@@ -46,6 +46,8 @@ export interface Query {
   nationality: string | null;
   birthDate: string | null;
   refresh?: boolean;
+  /** Manual "تحديث": wider news windows + official club channels. */
+  deep?: boolean;
 }
 
 const UA = "FootballBubbles/1.0 (club verification; contact via app)";
@@ -282,6 +284,13 @@ export const newsProvider: ClubSourceProvider = {
       searchHeadlines(`${n} (lineup OR "starting XI" OR "line-up") when:21d`, "en", q.refresh),
       searchHeadlines(`${n} (signs OR joins OR "completes move" OR transfer OR loan OR debut) when:60d`, "en", q.refresh),
       searchHeadlines(`${n} (تشكيلة OR انتقال OR ينضم OR رسميا) when:30d`, "ar", q.refresh),
+      ...(q.deep
+        ? [
+            searchHeadlines(`${n} (official OR unveiled OR "here we go" OR announces OR presented) when:120d`, "en", true),
+            searchHeadlines(`${n} (goal OR scores OR "man of the match" OR assist) when:14d`, "en", true),
+            searchHeadlines(`${n} (يوقع OR تعاقد OR صفقة OR هدف OR يسجل) when:90d`, "ar", true),
+          ]
+        : []),
     ]);
     const seen = new Set<string>();
     const articles = lists

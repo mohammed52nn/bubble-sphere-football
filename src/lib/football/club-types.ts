@@ -54,5 +54,5 @@ export interface EvidenceItem {
   url: string;
   source: string;
   publishedAt: string | null;
-  kind: "transfer" | "lineup" | "official";
+  kind: "transfer" | "lineup" | "official" | "record";
 }
