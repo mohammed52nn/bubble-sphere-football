@@ -37,6 +37,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+const norm = (v: string | null | undefined) => (v ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+function sameName(a: string | null | undefined, b: string | null | undefined) {
+  const x = norm(a);
+  const y = norm(b);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+}
+
 export function PlayerProfileOverlay({
   seed,
   profile,
@@ -156,15 +163,29 @@ export function PlayerProfileOverlay({
               onClick={(event) => {
                 event.stopPropagation();
                 onRefresh();
-                toast.info("نتحقق الآن من نادي اللاعب في الأخبار والتشكيلات الرسمية...");
-                void clubCheck.refetch().then((r) => {
-                  if (r.data?.status === "changed") toast.success(`النادي الحالي: ${r.data.name}`);
+                if (!profile) return;
+                const id = toast.loading("نتحقق الآن من نادي اللاعب في الصحف والمواقع والتشكيلات الرسمية...");
+                void clubCheck.deepCheck().then((r) => {
+                  toast.dismiss(id);
+                  if (r.status === "changed") {
+                    toast.success(
+                      manualClub
+                        ? `النادي الحالي حسب الأخبار: ${r.name} (لديك تصحيح يدوي: ${manualClub})`
+                        : `تم تصحيح النادي: ${r.name}`,
+                    );
+                  } else if (r.status === "confirmed") {
+                    toast.success(`تأكدنا: ${r.name} هو النادي الحالي.`);
+                  } else if (r.status === "conflict" && !sameName(r.name, displayedClub)) {
+                    toast.warning(`قد يكون انتقل إلى ${r.name} — الأدلة غير كافية بعد. يمكنك اعتماده أدناه.`);
+                  } else {
+                    toast.info("لم نجد دليلًا حديثًا يغيّر النادي المعروض.");
+                  }
                 });
               }}
-              disabled={refreshing || loading}
+              disabled={refreshing || loading || clubCheck.deepChecking}
               className="glass-panel flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium text-foreground disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              <RotateCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
+              <RotateCw className={`h-3.5 w-3.5 ${refreshing || clubCheck.deepChecking ? "animate-spin" : ""}`} aria-hidden />
               تحديث
             </button>
           </div>
@@ -288,20 +309,51 @@ export function PlayerProfileOverlay({
                 )}
               </div>
 
-              {verifiedClub && verifiedClub.status !== "unavailable" && (verifiedClub.evidence?.length ?? 0) > 0 && (
-                <Section title="لماذا هذا النادي؟">
-                  <ul className="space-y-1.5">
-                    {verifiedClub.evidence!.slice(0, 4).map((e) => (
-                      <li key={e.url}>
-                        <a href={e.url} target="_blank" rel="noopener noreferrer" className="glass-panel flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
-                          <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-                          <span>{e.kind === "lineup" ? "تشكيلة: " : e.kind === "official" ? "رسمي: " : "انتقال: "}{e.title} — {e.source}{e.publishedAt ? ` · ${relativeTime(e.publishedAt)}` : ""}</span>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </Section>
-              )}
+              <Section title="لماذا هذا النادي؟">
+                {!verifiedClub || clubCheck.deepChecking ? (
+                  <p className="glass-card px-4 py-3 text-xs text-muted-foreground" aria-live="polite">
+                    جارٍ التحقق من النادي الحالي في الأخبار والتشكيلات…
+                  </p>
+                ) : verifiedClub.status === "unavailable" ? (
+                  <p className="glass-card px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                    لم نجد الآن دليلًا حديثًا كافيًا من الأخبار أو قواعد البيانات؛ النادي المعروض من ملف اللاعب. اضغط «تحديث» لبحث أوسع.
+                  </p>
+                ) : (
+                  <>
+                    <p className="glass-card px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                      {verifiedClub.status === "changed"
+                        ? `انتقل${verifiedClub.previousClub ? ` من ${verifiedClub.previousClub}` : ""} إلى ${verifiedClub.name} — ثقة ${verifiedClub.score}%.`
+                        : verifiedClub.status === "confirmed"
+                          ? `${verifiedClub.name} مؤكد كنادٍ حالي — ثقة ${verifiedClub.score}%.`
+                          : sameName(verifiedClub.name, displayedClub)
+                            ? `المصادر غير متفقة تمامًا، والأرجح ${verifiedClub.name}.`
+                            : `مصادر حديثة تشير إلى ${verifiedClub.name}، لكن الأدلة غير كافية لتغييره تلقائيًا.`}
+                      {verifiedClub.proof === "confirmed_today" && " ✓ مؤكد اليوم بالأخبار والتشكيلة."}
+                    </p>
+                    {verifiedClub.status === "conflict" && !sameName(verifiedClub.name, displayedClub) && (
+                      <button
+                        type="button"
+                        onClick={() => saveClub(verifiedClub.name)}
+                        className="glass-panel mt-2 rounded-full px-3 py-1.5 text-xs text-foreground"
+                      >
+                        اعتماد {verifiedClub.name} كنادٍ حالي
+                      </button>
+                    )}
+                    {(verifiedClub.evidence?.length ?? 0) > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {verifiedClub.evidence!.slice(0, 6).map((e) => (
+                          <li key={e.url + e.title}>
+                            <a href={e.url} target="_blank" rel="noopener noreferrer" className="glass-panel flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
+                              <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                              <span>{e.kind === "lineup" ? "تشكيلة: " : e.kind === "official" ? "رسمي: " : e.kind === "record" ? "سجل: " : "انتقال: "}{e.title} — {e.source}{e.publishedAt ? ` · ${relativeTime(e.publishedAt)}` : ""}</span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </Section>
 
               {profile.bio && (
                 <Section title="نبذة">
