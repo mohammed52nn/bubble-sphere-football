@@ -1,5 +1,5 @@
 import { AiUnavailableError, NO_HALLUCINATION_RULES, researchJson } from "./ai.server";
-import { cacheDrop, cached } from "./cache.server";
+import { cacheDrop, cacheGet, cached } from "./cache.server";
 import { fetchArticles, hasFreshNews } from "./news.server";
 import { resolvePortrait } from "./wikipedia.server";
 import type { DiscoveryResult, NewsItem, PlayerProfile, PlayerSeed } from "./types";
@@ -278,7 +278,8 @@ export async function profileFor(args: {
   refresh?: boolean;
 }): Promise<PlayerProfile> {
   const key = `profile:${slug(args.latinName)}`;
-  if (args.refresh) cacheDrop(key);
+  // Keep the last good profile: a failed refresh must never wipe known details.
+  const previous = cacheGet<PlayerProfile>(key);
   if (args.refresh) cacheDrop(`news:${args.latinName}`);
 
   return cached<PlayerProfile>(key, 30 * 60 * 1000, async () => {
@@ -299,13 +300,16 @@ export async function profileFor(args: {
       buildNews(args.displayName, args.latinName),
     ]);
 
+    const news = newsResult.status === "fulfilled" ? newsResult.value : [];
+    if (aiResult.status === "rejected" && previous) {
+      return { ...previous, news: news.length > 0 ? news : previous.news };
+    }
     if (aiResult.status === "rejected" && portraitResult.status === "rejected") {
       throw new AiUnavailableError("research_failed");
     }
 
     const ai = (aiResult.status === "fulfilled" ? aiResult.value : {}) as Record<string, unknown>;
     const portrait = portraitResult.status === "fulfilled" ? portraitResult.value : null;
-    const news = newsResult.status === "fulfilled" ? newsResult.value : [];
     const birthDate = clean(ai["birthDate"]);
 
     const sources: { label: string; url: string }[] = [];
@@ -356,5 +360,5 @@ export async function profileFor(args: {
         typeof ai["confidence"] === "number" ? Math.min(1, Math.max(0, ai["confidence"])) : 0.6,
       lastUpdated: new Date().toISOString(),
     };
-  });
+  }, args.refresh === true);
 }
