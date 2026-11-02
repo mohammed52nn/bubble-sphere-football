@@ -13,6 +13,8 @@ mock.module("./ai.server", () => ({
 mock.module("./wikipedia.server", () => ({
   resolvePortrait: async () => ({ image: null, imageSource: null, pageUrl: null, bio: null }),
 }));
+const realNews = await import("./news.server");
+mock.module("./news.server", () => ({ ...realNews, fetchArticles: async () => [] }));
 
 const { profileFor } = await import("./research.server");
 const { cacheDrop } = await import("./cache.server");
