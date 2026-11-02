@@ -360,5 +360,5 @@ export async function profileFor(args: {
         typeof ai["confidence"] === "number" ? Math.min(1, Math.max(0, ai["confidence"])) : 0.6,
       lastUpdated: new Date().toISOString(),
     };
-  });
+  }, args.refresh === true);
 }
