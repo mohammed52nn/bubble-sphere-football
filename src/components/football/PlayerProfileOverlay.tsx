@@ -224,7 +224,7 @@ export function PlayerProfileOverlay({
               <p className="truncate text-xs text-muted-foreground" style={{ direction: "ltr" }}>
                 {profile?.latinName ?? seed.latinName}
               </p>
-              <p className="mt-1.5 inline-flex max-w-full truncate rounded-full border border-silver/15 bg-secondary/40 px-2.5 py-0.5 text-xs font-medium text-foreground/90">
+              <p className="mt-1.5 inline-block max-w-full truncate rounded-full border border-silver/15 bg-secondary/40 px-2.5 py-0.5 text-xs font-medium text-foreground/90">
                 {[displayedClub, profile?.position ?? seed.position]
                   .filter(Boolean)
                   .join(" · ") || "غير متوفر"}
