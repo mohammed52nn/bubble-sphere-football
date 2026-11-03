@@ -48,7 +48,7 @@ export function SmartLoaderScreen({ active, done, offline, failed, onRetry }: Bo
           <span className="animate-soft-pulse absolute inset-[32%] rounded-full bg-primary/50 blur-[6px]" />
         </div>
 
-        <p className="font-display mt-5 text-base font-bold text-foreground text-glow">
+        <p className="font-display text-silver-gradient mt-5 text-base font-bold">
           فقاعات كرة القدم
         </p>
 
@@ -63,7 +63,7 @@ export function SmartLoaderScreen({ active, done, offline, failed, onRetry }: Bo
             <button
               type="button"
               onClick={onRetry}
-              className="glass-panel mt-5 rounded-full px-5 py-2 text-sm font-medium text-foreground transition-transform hover:scale-[1.03] active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="glass-panel mt-5 rounded-full px-5 py-2 text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               حاول مرة أخرى
             </button>
@@ -81,7 +81,7 @@ export function SmartLoaderScreen({ active, done, offline, failed, onRetry }: Bo
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+                className="progress-fill h-full rounded-full transition-[width] duration-300 ease-out"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -108,7 +108,7 @@ export function SmartLoaderInline({ active, done }: { active: boolean; done: boo
       </div>
       <div className="mt-1 h-[2px] w-full overflow-hidden rounded-full bg-foreground/10">
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+          className="progress-fill h-full rounded-full transition-[width] duration-300 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>

@@ -15,10 +15,11 @@ interface Props {
   seed: PlayerSeed;
   layout: BubbleLayout;
   phase: "entering" | "live" | "exiting";
+  selected?: boolean;
   onOpen: (seed: PlayerSeed) => void;
 }
 
-export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
+export function PlayerBubble({ seed, layout, phase, selected = false, onOpen }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [sheen, setSheen] = useState(0);
@@ -27,6 +28,7 @@ export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
   const driftY = 10 + seededRandom(seed.id, 2) * 16;
   const duration = 22 + seededRandom(seed.id, 3) * 16;
   const delay = seededRandom(seed.id, 4) * 8;
+  const glint = 11 + seededRandom(seed.id, 5) * 8;
   const showImage = Boolean(seed.image) && !imageFailed;
 
   return (
@@ -37,14 +39,15 @@ export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
         top: `${layout.top}%`,
         width: `${layout.size}%`,
         opacity: layout.depth,
-        zIndex: Math.round(layout.depth * 10),
+        zIndex: selected ? 20 : Math.round(layout.depth * 10),
       }}
     >
       <div
         className={cn(
-          "animate-bubble-float",
+          "animate-bubble-float relative",
           phase === "entering" && "animate-bubble-enter",
           phase === "exiting" && "animate-bubble-exit",
+          selected && "bubble-selected",
         )}
         style={
           {
@@ -52,9 +55,18 @@ export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
             "--drift-y": driftY,
             "--float-duration": `${duration}s`,
             "--float-delay": `-${delay}s`,
+            "--glint-duration": `${glint}s`,
           } as React.CSSProperties
         }
       >
+        {/* soft ground shadow — bubble feels suspended */}
+        <span
+          aria-hidden
+          className={cn(
+            "bubble-ground pointer-events-none absolute inset-x-[16%] -bottom-[9%] h-[12%] rounded-full transition-opacity duration-500",
+            selected ? "opacity-50" : "opacity-90",
+          )}
+        />
         <button
           type="button"
           onPointerDown={() => {
@@ -66,9 +78,13 @@ export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
           onClick={() => onOpen(seed)}
           aria-label={`عرض ملف اللاعب ${seed.displayName}`}
           className={cn(
-            "bubble-shell group relative block aspect-square w-full overflow-hidden rounded-full transition-transform duration-300 ease-out",
+            "bubble-shell group relative block aspect-square w-full overflow-hidden rounded-full transition-[transform,translate,scale,box-shadow] duration-500 ease-[cubic-bezier(0.22,0.68,0.24,1)]",
             "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-            pressed ? "scale-[0.94]" : "hover:scale-[1.04]",
+            selected
+              ? "-translate-y-1.5 scale-[1.08] shadow-[var(--shadow-lift)]"
+              : pressed
+                ? "scale-[0.95]"
+                : "hover:scale-[1.04]",
           )}
         >
           {showImage ? (
@@ -89,15 +105,18 @@ export function PlayerBubble({ seed, layout, phase, onOpen }: Props) {
             </span>
           )}
 
-          {/* glass reflection + rim */}
+          {/* glass reflection */}
           <span
             className="pointer-events-none absolute inset-0 rounded-full"
             style={{
               background:
-                "linear-gradient(160deg, oklch(1 0 0 / 30%) 0%, transparent 38%, transparent 70%, oklch(0.8 0.1 224 / 18%) 100%)",
+                "linear-gradient(160deg, oklch(1 0 0 / 22%) 0%, transparent 34%, transparent 70%, oklch(0.8 0.1 224 / 16%) 100%)",
             }}
           />
-          <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-silver/25" />
+          {/* slow drifting specular highlight */}
+          <span className="bubble-glint pointer-events-none absolute -inset-[15%] rounded-full" />
+          {/* thin silver-blue rim */}
+          <span className="bubble-rim pointer-events-none absolute inset-0 rounded-full" />
           {sheen > 0 && (
             <span
               key={sheen}

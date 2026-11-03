@@ -20,7 +20,7 @@ interface Props {
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="glass-panel rounded-lg px-3 py-2">
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
+      <dt className="text-[11px] tracking-wide text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 truncate text-sm font-medium text-foreground">
         {value ?? <span className="text-xs font-normal text-muted-foreground">غير متوفر</span>}
       </dd>
@@ -30,8 +30,11 @@ function Field({ label, value }: { label: string; value: string | null }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mt-6">
-      <h3 className="font-display mb-2 text-sm font-semibold text-silver">{title}</h3>
+    <section className="mt-7">
+      <h3 className="font-display mb-2.5 flex items-center gap-3 text-sm font-semibold text-silver">
+        <span className="shrink-0">{title}</span>
+        <span className="section-rule h-px flex-1" aria-hidden />
+      </h3>
       {children}
     </section>
   );
@@ -124,15 +127,15 @@ export function PlayerProfileOverlay({
       role="dialog"
       aria-modal="true"
       aria-label={`ملف اللاعب ${name}`}
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/70 backdrop-blur-xl"
+      className="animate-overlay-in fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-background/75 backdrop-blur-xl"
     >
       <div className="mx-auto min-h-full w-full max-w-xl pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-background/40 px-4 py-3 backdrop-blur-md">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-silver/10 bg-background/45 px-4 py-3 backdrop-blur-md">
           <button
             type="button"
             onClick={onClose}
             aria-label="إغلاق ملف اللاعب"
-            className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <X className="h-4 w-4" aria-hidden />
           </button>
@@ -144,7 +147,7 @@ export function PlayerProfileOverlay({
                 void handleShare();
               }}
               aria-label={`مشاركة ملف ${name}`}
-              className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <Share2 className="h-4 w-4" aria-hidden />
             </button>
@@ -154,7 +157,7 @@ export function PlayerProfileOverlay({
               rel="noopener noreferrer"
               onClick={(event) => event.stopPropagation()}
               aria-label={`ابحث عن ${name} في Google`}
-              className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground transition-transform active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <Globe className="h-4 w-4" aria-hidden />
             </a>
@@ -194,9 +197,9 @@ export function PlayerProfileOverlay({
 
 
 
-        <div className="animate-rise-in px-4">
+        <div className="animate-rise-in stagger-sections px-4 pt-2">
           <div className="flex items-end gap-4">
-            <div className="bubble-shell relative h-24 w-24 shrink-0 overflow-hidden rounded-full">
+            <div className="bubble-shell relative h-28 w-28 shrink-0 overflow-hidden rounded-full shadow-[var(--shadow-lift)]">
               {image ? (
                 <img
                   src={image}
@@ -212,15 +215,16 @@ export function PlayerProfileOverlay({
                   </span>
                 </span>
               )}
+              <span className="bubble-rim pointer-events-none absolute inset-0 rounded-full" aria-hidden />
             </div>
             <div className="min-w-0 pb-1">
-              <h2 className="font-display truncate text-xl font-bold text-foreground text-glow">
+              <h2 className="font-display text-silver-gradient truncate text-2xl leading-tight font-bold">
                 {name}
               </h2>
               <p className="truncate text-xs text-muted-foreground" style={{ direction: "ltr" }}>
                 {profile?.latinName ?? seed.latinName}
               </p>
-              <p className="mt-1 truncate text-xs text-silver/90">
+              <p className="mt-1.5 inline-block max-w-full truncate rounded-full border border-silver/15 bg-secondary/40 px-2.5 py-0.5 text-xs font-medium text-foreground/90">
                 {[displayedClub, profile?.position ?? seed.position]
                   .filter(Boolean)
                   .join(" · ") || "غير متوفر"}
@@ -434,7 +438,7 @@ export function PlayerProfileOverlay({
                           href={item.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="glass-card block px-4 py-3 transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                          className="glass-card block px-4 py-3 transition-[transform,border-color] duration-300 hover:scale-[1.01] hover:border-silver/40 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                         >
                           <p className="text-sm leading-snug font-medium text-foreground">
                             {item.title}
