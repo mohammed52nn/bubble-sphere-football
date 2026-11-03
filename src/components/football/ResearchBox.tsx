@@ -27,14 +27,14 @@ export function ResearchBox({
     <div className="animate-rise-in px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
       <div className="mx-auto w-full max-w-xl">
         <div className="flex items-center justify-between gap-3 px-1 pb-2">
-          <h1 className="font-display text-lg leading-none font-bold tracking-tight text-foreground text-glow">
+          <h1 className="font-display text-silver-gradient text-lg leading-none font-bold tracking-tight">
             فقاعات كرة القدم
           </h1>
           <button
             type="button"
             onClick={onShuffle}
             aria-label="اكتشاف مجموعة جديدة"
-            className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-silver/90 transition-transform hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="glass-panel flex h-9 w-9 items-center justify-center rounded-full text-silver/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} aria-hidden />
           </button>
@@ -46,7 +46,7 @@ export function ResearchBox({
             onSubmit(draft.trim());
             (event.currentTarget.querySelector("input") as HTMLInputElement | null)?.blur();
           }}
-          className="glass-panel flex items-center gap-2 rounded-full px-3 py-2"
+          className="glass-panel search-field flex items-center gap-2 rounded-full px-3 py-2"
         >
           <Search className="h-4 w-4 shrink-0 text-primary/90" aria-hidden />
           <input
@@ -75,7 +75,7 @@ export function ResearchBox({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="btn-primary-glass rounded-full px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             بحث
           </button>

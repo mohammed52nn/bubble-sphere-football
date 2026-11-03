@@ -10,11 +10,12 @@ interface Props {
   layouts: Map<string, BubbleLayout>;
   loading: boolean;
   failed: boolean;
+  activeId?: string | null;
   onOpen: (seed: PlayerSeed) => void;
   onRetry: () => void;
 }
 
-export function BubbleField({ bubbles, layouts, loading, failed, onOpen, onRetry }: Props) {
+export function BubbleField({ bubbles, layouts, loading, failed, activeId = null, onOpen, onRetry }: Props) {
   if (loading && bubbles.length === 0) {
     return (
       <div className="flex min-h-[62vh] items-center justify-center">
@@ -39,7 +40,7 @@ export function BubbleField({ bubbles, layouts, loading, failed, onOpen, onRetry
           <button
             type="button"
             onClick={onRetry}
-            className="glass-panel mt-5 rounded-full px-5 py-2 text-sm font-medium text-foreground transition-transform hover:scale-[1.03] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="glass-panel mt-5 rounded-full px-5 py-2 text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             حاول مرة أخرى
           </button>
@@ -59,6 +60,7 @@ export function BubbleField({ bubbles, layouts, loading, failed, onOpen, onRetry
             seed={bubble.seed}
             layout={layout}
             phase={bubble.phase}
+            selected={activeId === bubble.seed.id}
             onOpen={onOpen}
           />
         );

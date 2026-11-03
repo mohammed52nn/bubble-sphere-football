@@ -152,6 +152,7 @@ function Index() {
         layouts={field.layouts}
         loading={!bootDone || (field.bubbles.length === 0 && discovery.isFetching)}
         failed={discovery.isError}
+        activeId={active?.id ?? null}
         onOpen={setActive}
         onRetry={() => void discovery.refetch()}
       />
