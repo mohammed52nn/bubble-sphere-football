@@ -1,4 +1,5 @@
 import { AiUnavailableError, NO_HALLUCINATION_RULES, researchJson } from "./ai.server";
+import { ROSTER } from "./roster";
 import { cacheDrop, cacheGet, cached } from "./cache.server";
 import { fetchArticles, hasFreshNews } from "./news.server";
 import { resolvePortrait } from "./wikipedia.server";
@@ -85,7 +86,34 @@ async function enrich(raw: NonNullable<DiscoveryRaw["players"]>[number]): Promis
   };
 }
 
+/** AI unavailable (e.g. no credits): real players from the fixed roster, no invented clubs. */
+async function rosterFallback(query: string | null, exclude: string[]): Promise<DiscoveryResult> {
+  const q = query?.trim().toLowerCase() ?? "";
+  const skip = new Set(exclude);
+  let pool = ROSTER.filter((p) => !skip.has(slug(p.latinName)));
+  if (q) pool = pool.filter((p) => p.latinName.toLowerCase().includes(q) || p.displayName.includes(q));
+  pool = [...pool].sort(() => Math.random() - 0.5).slice(0, 8);
+  const seeds = await Promise.all(
+    pool.map((p) =>
+      enrich({ latinName: p.latinName, displayName: p.displayName, fame: "known" } as never),
+    ),
+  );
+  return {
+    players: seeds.filter((s): s is PlayerSeed => s !== null),
+    interpretation: null,
+    degraded: true,
+  };
+}
+
 export async function discover(query: string | null, exclude: string[]): Promise<DiscoveryResult> {
+  try {
+    return await discoverWithAi(query, exclude);
+  } catch {
+    return rosterFallback(query, exclude);
+  }
+}
+
+async function discoverWithAi(query: string | null, exclude: string[]): Promise<DiscoveryResult> {
   const key = `discover:${query ?? "__home__"}:${exclude.slice(0, 12).sort().join(",")}`;
   return cached<DiscoveryResult>(key, query ? 20 * 60 * 1000 : 10 * 60 * 1000, async () => {
     const user = query
