@@ -1,5 +1,6 @@
 import { AiUnavailableError, NO_HALLUCINATION_RULES, researchJson } from "./ai.server";
 import { ROSTER } from "./roster";
+import { wikidataFacts } from "./wikidata-facts.server";
 import { cacheDrop, cacheGet, cached } from "./cache.server";
 import { fetchArticles, hasFreshNews } from "./news.server";
 import { resolvePortrait } from "./wikipedia.server";
@@ -337,10 +338,23 @@ export async function profileFor(args: {
     }
 
     const ai = (aiResult.status === "fulfilled" ? aiResult.value : {}) as Record<string, unknown>;
+    const sources: { label: string; url: string }[] = [];
+    if (aiResult.status === "rejected") {
+      // AI unavailable: fill basic fields from Wikidata (real data, no guessing).
+      const facts = await wikidataFacts(args.latinName).catch(() => null);
+      if (facts) {
+        ai["birthDate"] = facts.birthDate ?? "";
+        ai["nationality"] = facts.nationality ?? "";
+        ai["position"] = facts.position ?? "";
+        ai["height"] = facts.height ?? "";
+        ai["club"] = facts.club ?? "";
+        ai["preferredFoot"] = facts.foot ?? "";
+        sources.push({ label: "ويكي بيانات", url: `https://www.wikidata.org/wiki/${facts.qid}` });
+      }
+    }
     const portrait = portraitResult.status === "fulfilled" ? portraitResult.value : null;
     const birthDate = clean(ai["birthDate"]);
 
-    const sources: { label: string; url: string }[] = [];
     if (portrait?.pageUrl) sources.push({ label: "ويكيبيديا", url: portrait.pageUrl });
 
     return {
