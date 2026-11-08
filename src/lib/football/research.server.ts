@@ -1,5 +1,6 @@
 import { AiUnavailableError, NO_HALLUCINATION_RULES, researchJson } from "./ai.server";
 import { ROSTER } from "./roster";
+import { packFor } from "./player-pack";
 import { wikidataFacts } from "./wikidata-facts.server";
 import { cacheDrop, cacheGet, cached } from "./cache.server";
 import { fetchArticles, hasFreshNews } from "./news.server";
@@ -312,9 +313,11 @@ export async function profileFor(args: {
   if (args.refresh) cacheDrop(`news:${args.latinName}`);
 
   return cached<PlayerProfile>(key, 30 * 60 * 1000, async () => {
+    const pack = packFor(args.latinName);
     const [portraitResult, aiResult, newsResult] = await Promise.allSettled([
       resolvePortrait(args.latinName, args.displayName),
-      researchJson<Record<string, unknown>>({
+      // Pack players are filled from the built-in pack: no AI credits spent.
+      pack ? Promise.reject(new Error("pack")) : researchJson<Record<string, unknown>>({
         system: `${NO_HALLUCINATION_RULES} املأ الحقول المؤكدة فقط، واترك الباقي "".`,
         user: [
           `ابنِ ملفًا للاعب: ${args.displayName} (${args.latinName}).`,
@@ -330,7 +333,7 @@ export async function profileFor(args: {
     ]);
 
     const news = newsResult.status === "fulfilled" ? newsResult.value : [];
-    if (aiResult.status === "rejected" && previous) {
+    if (aiResult.status === "rejected" && previous && !pack) {
       return { ...previous, news: news.length > 0 ? news : previous.news };
     }
     if (aiResult.status === "rejected" && portraitResult.status === "rejected") {
@@ -350,6 +353,19 @@ export async function profileFor(args: {
         ai["club"] = facts.club ?? "";
         ai["preferredFoot"] = facts.foot ?? "";
         sources.push({ label: "ويكي بيانات", url: `https://www.wikidata.org/wiki/${facts.qid}` });
+      }
+      if (pack) {
+        ai["fullName"] = pack.fullName;
+        ai["birthDate"] = pack.birthDate;
+        ai["nationality"] = pack.nationality;
+        ai["position"] = pack.position;
+        ai["preferredFoot"] = pack.foot;
+        ai["height"] = pack.height;
+        ai["bio"] = pack.bio;
+        ai["career"] = pack.career;
+        ai["achievements"] = pack.achievements;
+        ai["confidence"] = 0.9;
+        if (!clean(ai["club"]) && pack.career.length) ai["club"] = pack.career[pack.career.length - 1]!.club;
       }
     }
     const portrait = portraitResult.status === "fulfilled" ? portraitResult.value : null;
