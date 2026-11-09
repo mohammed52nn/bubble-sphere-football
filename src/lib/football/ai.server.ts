@@ -11,9 +11,23 @@ export class AiUnavailableError extends Error {
   }
 }
 
+/** Circuit breaker: after a credit/permission refusal the AI is skipped for a while (no wasted calls). */
+const PAUSE_MS = 30 * 60 * 1000;
+let pausedUntil = 0;
+
+export function aiAvailable(): boolean {
+  return !!process.env["LOVABLE_API_KEY"] && Date.now() >= pausedUntil;
+}
+
+/** Test hook. */
+export function resetAiBreaker() {
+  pausedUntil = 0;
+}
+
 /**
  * Structured research call. Returns parsed JSON matching the given schema.
  * Never called from the browser — LOVABLE_API_KEY stays server-side.
+ * The app works fully without it; this is an optional enhancement.
  */
 export async function researchJson<T>(args: {
   system: string;
@@ -23,6 +37,7 @@ export async function researchJson<T>(args: {
 }): Promise<T> {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new AiUnavailableError("missing_api_key");
+  if (Date.now() < pausedUntil) throw new AiUnavailableError("ai_paused", 402);
 
   const res = await fetch(GATEWAY, {
     method: "POST",
@@ -46,6 +61,8 @@ export async function researchJson<T>(args: {
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    if (res.status === 402 || res.status === 403) pausedUntil = Date.now() + PAUSE_MS;
+    else if (res.status === 429) pausedUntil = Date.now() + 60 * 1000;
     throw new AiUnavailableError(`gateway_${res.status}: ${body.slice(0, 300)}`, res.status);
   }
 
