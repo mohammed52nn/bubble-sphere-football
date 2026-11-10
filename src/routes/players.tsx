@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { readSeenPlayers } from "@/lib/football/seen-players";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { StadiumBackground } from "@/components/football/StadiumBackground";
@@ -55,6 +55,7 @@ function seedOf(p: HallPlayer): PlayerSeed {
 const BASE: HallPlayer[] = ROSTER.map((p) => ({ ...p, club: null }));
 
 function PlayersPage() {
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
   const [active, setActive] = useState<PlayerSeed | null>(null);
   const [hall, setHall] = useState<HallPlayer[]>(BASE);
@@ -94,11 +95,17 @@ function PlayersPage() {
     enabled: active !== null,
     staleTime: 10 * 60 * 1000,
     retry: 0,
-    queryFn: () => getPlayerProfile({ data: { latinName: active!.latinName, displayName: active!.displayName, refresh: false } }),
+    queryFn: () => {
+      if (!active) throw new Error("No selected player");
+      return getPlayerProfile({ data: { latinName: active.latinName, displayName: active.displayName, refresh: false } });
+    },
   });
   const refresh = useMutation({
-    mutationFn: () => getPlayerProfile({ data: { latinName: active!.latinName, displayName: active!.displayName, refresh: true } }),
-    onSuccess: () => { void profile.refetch(); toast.success("تم تحديث المعلومات."); },
+    mutationFn: () => {
+      if (!active) throw new Error("No selected player");
+      return getPlayerProfile({ data: { latinName: active.latinName, displayName: active.displayName, refresh: true } });
+    },
+    onSuccess: (result) => { queryClient.setQueryData(["profile", result.latinName], result); toast.success("تم تحديث المعلومات."); },
     onError: () => toast.error("تعذّر تحديث المعلومات الآن."),
   });
 

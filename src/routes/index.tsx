@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { StadiumBackground } from "@/components/football/StadiumBackground";
 import { ResearchBox } from "@/components/football/ResearchBox";
@@ -35,6 +35,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [typing, setTyping] = useState(false);
   const [active, setActive] = useState<PlayerSeed | null>(null);
@@ -92,27 +93,31 @@ function Index() {
     enabled: active !== null,
     staleTime: 10 * 60 * 1000,
     retry: 0,
-    queryFn: () =>
-      getPlayerProfile({
+    queryFn: () => {
+      if (!active) throw new Error("No selected player");
+      return getPlayerProfile({
         data: {
-          latinName: active!.latinName,
-          displayName: active!.displayName,
+          latinName: active.latinName,
+          displayName: active.displayName,
           refresh: false,
         },
-      }),
+      });
+    },
   });
 
   const refresh = useMutation({
-    mutationFn: () =>
-      getPlayerProfile({
+    mutationFn: () => {
+      if (!active) throw new Error("No selected player");
+      return getPlayerProfile({
         data: {
-          latinName: active!.latinName,
-          displayName: active!.displayName,
+          latinName: active.latinName,
+          displayName: active.displayName,
           refresh: true,
         },
-      }),
-    onSuccess: () => {
-      void profile.refetch();
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(["profile", result.latinName], result);
       toast.success("تم تحديث المعلومات.");
     },
     onError: () => toast.error("تعذّر تحديث المعلومات الآن."),

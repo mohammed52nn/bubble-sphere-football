@@ -243,132 +243,32 @@ export const wikidataProvider: ClubSourceProvider = {
   },
 };
 
-/**
- * News intelligence — reads real recent headlines (transfers, official announcements,
- * starting line-ups, social posts reported by the press) and lets the AI extract the
- * club the player is *currently* playing for. Only evidence quoted in real headlines counts.
- */
-const newsSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["samePlayer", "currentClub", "previousClub", "transferState", "evidence"],
-  properties: {
-    samePlayer: { type: "boolean" },
-    currentClub: { type: "string" },
-    previousClub: { type: "string" },
-    transferState: { type: "string", enum: ["PERMANENT", "LOAN", "RETURN_FROM_LOAN", "FREE_AGENT", "RETIRED", "NEW_SIGNING", "UNKNOWN"] },
-    evidence: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["index", "kind"],
-        properties: {
-          index: { type: "number" },
-          kind: { type: "string", enum: ["lineup", "official", "transfer_done", "match_report", "social", "rumor"] },
-        },
-      },
-    },
-  },
-} as const;
-
+/** Real completed-transfer headlines + independently fetched recent lineup proof; never spends AI credits. */
 export const newsProvider: ClubSourceProvider = {
-  id: "news",
-  label: "أحدث الأخبار",
-  reliability: 0.7,
+  id: "news", label: "أحدث الأخبار", reliability: 0.7,
   async observe(q) {
     const { searchHeadlines } = await import("./news.server");
-    const { researchJson } = await import("./ai.server");
-    const n = `"${q.latinName}"`;
-    const lists = await Promise.allSettled([
-      searchHeadlines(`${n} (lineup OR "starting XI" OR "line-up") when:21d`, "en", q.refresh),
-      searchHeadlines(`${n} (signs OR joins OR "completes move" OR transfer OR loan OR debut) when:60d`, "en", q.refresh),
-      searchHeadlines(`${n} (تشكيلة OR انتقال OR ينضم OR رسميا) when:30d`, "ar", q.refresh),
-      ...(q.deep
-        ? [
-            searchHeadlines(`${n} (official OR unveiled OR "here we go" OR announces OR presented) when:120d`, "en", true),
-            searchHeadlines(`${n} (goal OR scores OR "man of the match" OR assist) when:14d`, "en", true),
-            searchHeadlines(`${n} (يوقع OR تعاقد OR صفقة OR هدف OR يسجل) when:90d`, "ar", true),
-          ]
-        : []),
-    ]);
-    const seen = new Set<string>();
-    const articles = lists
-      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
-      .filter((a) => (seen.has(a.sourceUrl) ? false : (seen.add(a.sourceUrl), true)))
-      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
-      .slice(0, q.deep ? 36 : 24);
-    if (articles.length < 2) return null;
-
-    const ai = await researchJson<{
-      samePlayer: boolean; currentClub: string; previousClub: string;
-      transferState: TransferState; evidence: { index: number; kind: string }[];
-    }>({
-      system:
-        "You verify a footballer's CURRENT club from real news headlines only. Never use memory to invent a club. " +
-        "Newest evidence wins: a starting line-up, match report, or official announcement from the last weeks outranks older info. " +
-        "Rumors ('linked with', 'interest', 'could') are NOT evidence of a move. If headlines do not clearly show the current club, return currentClub \"\". " +
-        "Return the club name in English. Set samePlayer=false if headlines are about a different person with the same name.",
-      user: [
-        `Player: ${q.latinName}. Nationality: ${q.nationality ?? "?"}. Club on file: ${q.club ?? "?"}. Born: ${q.birthDate ?? "?"}. Today: ${new Date().toISOString().slice(0, 10)}.`,
-        "Headlines (index, date, source, title):",
-        ...articles.map((a, i) => `${i} | ${a.publishedAt?.slice(0, 10) ?? "?"} | ${a.source} | ${a.title}`),
-        "evidence: list ONLY headlines that directly show the player at currentClub, with their kind.",
-      ].join("\n"),
-      schemaName: "news_club",
-      schema: newsSchema,
+    const { transferProof } = await import("./transfer-rules");
+    const { ROSTER } = await import("./roster");
+    const ar = ROSTER.find(p => normName(p.latinName) === normName(q.latinName))?.displayName;
+    const names = [q.latinName, ...(ar ? [ar] : [])];
+    const lists = await Promise.allSettled(names.map(name => searchHeadlines(`"${name}" (joins OR signs OR انتقال OR ينضم OR يوقع OR رسميا) when:${q.deep ? 120 : 60}d`, /[\u0600-\u06ff]/.test(name) ? "ar" : "en", q.refresh)));
+    const articles = lists.flatMap(r => r.status === "fulfilled" ? r.value : []);
+    const proof = transferProof(articles,names);
+    if (!proof) return null;
+    const lineupLists = await Promise.allSettled(names.map(name => searchHeadlines(`"${name}" "${proof.club}" (lineup OR "starting XI" OR "line-up" OR تشكيلة) when:21d`, /[\u0600-\u06ff]/.test(name) ? "ar" : "en", q.refresh)));
+    const lineupHits = lineupLists.flatMap(r => r.status === "fulfilled" ? r.value : []).filter(a => {
+      const date = Date.parse(a.publishedAt ?? "");
+      return date >= Date.now() - 21 * 86400000 && date <= Date.now() && names.some(n => a.title.toLowerCase().includes(n.toLowerCase())) && a.title.toLowerCase().includes(proof.club.toLowerCase()) && /lineup|line-up|starting xi|تشكيل/i.test(a.title) && !/\?|؟|could|expected|predicted|متوقع|محتمل/i.test(a.title);
     });
-
-    const club = s(ai.currentClub);
-    if (!ai.samePlayer || !club) return null;
-    const strongKinds = new Set(["lineup", "official", "transfer_done", "match_report"]);
-    const proof = ai.evidence.filter((e) => articles[e.index] && strongKinds.has(e.kind));
-    const sources = new Set(proof.map((e) => articles[e.index]!.source));
-    if (sources.size < 1) return null; // ≥2 independent outlets are still required to change a club (newsStrong)
-
-    // Step 2 — line-up check: look for recent line-up headlines of the candidate club
-    // that literally name the player (surname match), from at least one outlet.
-    const surname = normName(q.latinName).split(" ").pop() ?? "";
-    const lineupLists = await Promise.allSettled([
-      searchHeadlines(`"${club}" (lineup OR "starting XI" OR "line-up" OR "team news") when:21d`, "en", q.refresh),
-      searchHeadlines(`تشكيلة "${club}" when:21d`, "ar", q.refresh),
-    ]);
-    const lineupHits = lineupLists
-      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
-      .filter((a) => surname.length > 2 && normName(a.title).includes(surname))
-      .filter((a) => /lineup|line-up|starting|xi|team news|تشكيل/i.test(a.title));
-    const kindOf = (k: string): EvidenceItem["kind"] =>
-      k === "lineup" || k === "match_report" ? "lineup" : k === "official" ? "official" : "transfer";
-    const items: EvidenceItem[] = [
-      ...proof.slice(0, 3).map((e) => {
-        const a = articles[e.index]!;
-        return { title: a.title, url: a.sourceUrl, source: a.source, publishedAt: a.publishedAt, kind: kindOf(e.kind) };
-      }),
-      ...lineupHits
-        .filter((a) => !articles.some((x) => x.sourceUrl === a.sourceUrl))
-        .slice(0, 2)
-        .map((a) => ({ title: a.title, url: a.sourceUrl, source: a.source, publishedAt: a.publishedAt, kind: "lineup" as const })),
-    ];
-
     return {
-      playerId: `news:${normName(q.latinName)}`,
-      name: q.latinName,
-      club,
-      teamId: null,
-      logo: null,
-      birthDate: null,
-      nationality: q.nationality,
-      previousClub: s(ai.previousClub) ?? q.club,
-      since: null,
-      transferState: ai.transferState ?? "UNKNOWN",
-      retired: ai.transferState === "RETIRED",
-      evidence: {
-        outlets: sources.size,
-        lineup: proof.some((e) => e.kind === "lineup" || e.kind === "match_report"),
-        official: proof.some((e) => e.kind === "official" || e.kind === "transfer_done"),
-        headlines: proof.slice(0, 4).map((e) => articles[e.index]!.title),
-        lineupConfirmed: lineupHits.length > 0,
-        items,
+      playerId: `news:${normName(q.latinName)}`, name: q.latinName, club: proof.club, teamId: null, logo: null,
+      birthDate: null, nationality: q.nationality, previousClub: q.club, since: null,
+      transferState: proof.loan ? "LOAN" : "NEW_SIGNING", retired: false,
+      evidence: { outlets: proof.outlets, lineup: lineupHits.length > 0, official: true,
+        headlines: proof.items.map(a => a.title), lineupConfirmed: lineupHits.length > 0,
+        items: [ ...proof.items.slice(0,4).map(a => ({ title: a.title, url: a.sourceUrl, source: a.source, publishedAt: a.publishedAt, kind: "transfer" as const })),
+          ...lineupHits.slice(0,2).map(a => ({ title: a.title, url: a.sourceUrl, source: a.source, publishedAt: a.publishedAt, kind: "lineup" as const })) ],
       },
     };
   },
@@ -407,7 +307,7 @@ export async function verifyCurrentClub(
   providers: ClubSourceProvider[] = PROVIDERS,
 ): Promise<ClubVerification> {
   const season = seasonOf();
-  const key = `club:v5:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}:${normalizeClub(q.club)}:${q.nationality ?? ""}`;
+  const key = `club:v6:${season}:${normName(q.latinName)}:${q.birthDate ?? ""}:${normalizeClub(q.club)}:${q.nationality ?? ""}`;
   const lastKey = `${key}:last`;
   const ttl = (inTransferWindow() ? 2 : 12) * 60 * 60 * 1000;
 

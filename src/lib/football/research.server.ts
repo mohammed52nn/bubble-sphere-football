@@ -1,13 +1,13 @@
-import { AiUnavailableError, NO_HALLUCINATION_RULES, researchJson } from "./ai.server";
+import { engineSearch } from "./search-engine.server";
 import { ROSTER } from "./roster";
 import { packFor } from "./player-pack";
 import { wikidataFacts } from "./wikidata-facts.server";
-import { cacheDrop, cacheGet, cached } from "./cache.server";
-import { fetchArticles, hasFreshNews } from "./news.server";
+import { cacheGet, cacheSet, cached } from "./cache.server";
+import { fetchArticles } from "./news.server";
 import { resolvePortrait } from "./wikipedia.server";
 import type { DiscoveryResult, NewsItem, PlayerProfile, PlayerSeed } from "./types";
 
-const str = { type: "string" } as const;
+
 
 function slug(value: string) {
   return value
@@ -24,32 +24,6 @@ function clean(value: unknown): string | null {
   if (!trimmed || /^(غير متوفر|unknown|n\/a|null|-)$/i.test(trimmed)) return null;
   return trimmed;
 }
-
-const discoverySchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["interpretation", "players"],
-  properties: {
-    interpretation: str,
-    players: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["displayName", "latinName", "club", "nationality", "position", "fame", "reason"],
-        properties: {
-          displayName: str,
-          latinName: str,
-          club: str,
-          nationality: str,
-          position: str,
-          fame: { type: "string", enum: ["global", "known", "emerging", "unknown"] },
-          reason: str,
-        },
-      },
-    },
-  },
-} as const;
 
 interface DiscoveryRaw {
   interpretation?: string;
@@ -68,23 +42,21 @@ async function enrich(raw: NonNullable<DiscoveryRaw["players"]>[number]): Promis
   const latinName = clean(raw.latinName);
   const displayName = clean(raw.displayName) ?? latinName;
   if (!latinName || !displayName) return null;
-  const [portrait, fresh] = await Promise.all([
-    resolvePortrait(latinName, displayName).catch(() => null),
-    hasFreshNews(latinName).catch(() => false),
-  ]);
+  const portrait = await resolvePortrait(latinName, displayName).catch(() => null);
+  const pack = packFor(latinName);
   return {
     id: slug(latinName),
     displayName,
     latinName,
     club: clean(raw.club),
-    nationality: clean(raw.nationality),
-    position: clean(raw.position),
+    nationality: clean(raw.nationality) ?? pack?.nationality ?? null,
+    position: clean(raw.position) ?? pack?.position ?? null,
     fame: raw.fame ?? "known",
     reason: clean(raw.reason),
     image: portrait?.image ?? null,
     imageSource: portrait?.imageSource ?? null,
     imageKind: portrait?.image ? "photo" : "fallback",
-    hasNews: fresh,
+    hasNews: false,
   };
 }
 
@@ -108,190 +80,20 @@ async function rosterFallback(query: string | null, exclude: string[]): Promise<
 }
 
 export async function discover(query: string | null, exclude: string[]): Promise<DiscoveryResult> {
-  try {
-    return await discoverWithAi(query, exclude);
-  } catch {
-    return rosterFallback(query, exclude);
+  if (!query?.trim()) return rosterFallback(null, exclude);
+  const result = await engineSearch(query).catch(() => null);
+  if (result?.hits.length) {
+    const skip = new Set(exclude);
+    const seeds = await Promise.all(result.hits.filter(p => !skip.has(slug(p.latinName))).map(p => enrich(p)));
+    return { players: seeds.filter((p): p is PlayerSeed => p !== null), interpretation: result.interpretation, degraded: false };
   }
+  const fallback = await rosterFallback(query, exclude);
+  return { ...fallback, interpretation: fallback.players.length ? "عرضنا اللاعبين المطابقين للاسم." : "لم نجد نتيجة مؤكدة لهذا البحث الآن؛ جرّب الاسم الكامل أو أعد المحاولة." };
 }
 
-async function discoverWithAi(query: string | null, exclude: string[]): Promise<DiscoveryResult> {
-  const key = `discover:${query ?? "__home__"}:${exclude.slice(0, 12).sort().join(",")}`;
-  return cached<DiscoveryResult>(key, query ? 20 * 60 * 1000 : 10 * 60 * 1000, async () => {
-    const user = query
-      ? [
-          `استعلام المستخدم: "${query}"`,
-          "افهم المقصود (قد يكون اسم لاعب، لاعب + نادٍ، دوري، جنسية، أو سؤال طبيعي).",
-          "أعد 7 لاعبين حقيقيين مرتبطين بالاستعلام. إذا كان الاستعلام عن لاعب محدد فاجعله الأول ثم لاعبين مرتبطين به (نفس النادي/المنتخب/المركز).",
-        ].join("\n")
-      : [
-          "أنشئ مجموعة اكتشاف من 7 لاعبين حقيقيين نشطين حاليًا، متنوعين في الدوريات والجنسيات والمراكز.",
-          "التوزيع المستهدف: 2 عالميون جدًا، 2 متوسطو الشهرة، 2 صاعدون، 1 أقل شهرة.",
-        ].join("\n");
-
-    const excludeNote = exclude.length
-      ? `\nتجنّب تكرار هؤلاء اللاعبين: ${exclude.slice(0, 20).join(", ")}.`
-      : "";
-
-    const data = await researchJson<DiscoveryRaw>({
-      system: `${NO_HALLUCINATION_RULES} أعد لاعبين حقيقيين فقط بأسمائهم الصحيحة.`,
-      user: `${user}${excludeNote}\nحقل interpretation: جملة عربية قصيرة تشرح كيف فهمت الاستعلام.`,
-      schemaName: "discovery",
-      schema: discoverySchema,
-    });
-
-    const seeds = (
-      await Promise.all((data.players ?? []).slice(0, 8).map((player) => enrich(player)))
-    ).filter((seed): seed is PlayerSeed => seed !== null);
-
-    const unique = new Map<string, PlayerSeed>();
-    for (const seed of seeds) if (!unique.has(seed.id)) unique.set(seed.id, seed);
-
-    return {
-      players: [...unique.values()].slice(0, 8),
-      interpretation: clean(data.interpretation),
-      degraded: false,
-    };
-  });
-}
-
-const profileSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "fullName",
-    "displayName",
-    "latinName",
-    "nationality",
-    "birthDate",
-    "club",
-    "position",
-    "preferredFoot",
-    "shirtNumber",
-    "height",
-    "marketValue",
-    "rating",
-    "bio",
-    "career",
-    "achievements",
-    "stats",
-    "confidence",
-  ],
-  properties: {
-    fullName: str,
-    displayName: str,
-    latinName: str,
-    nationality: str,
-    birthDate: str,
-    club: str,
-    position: str,
-    preferredFoot: str,
-    shirtNumber: str,
-    height: str,
-    marketValue: str,
-    rating: str,
-    bio: str,
-    confidence: { type: "number" },
-    career: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["period", "club", "note"],
-        properties: { period: str, club: str, note: str },
-      },
-    },
-    achievements: { type: "array", items: str },
-    stats: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["label", "value"],
-        properties: { label: str, value: str },
-      },
-    },
-  },
-} as const;
-
-const newsSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["items"],
-  properties: {
-    items: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["index", "summary", "relevance", "reliability"],
-        properties: {
-          index: { type: "number" },
-          summary: str,
-          relevance: { type: "number" },
-          reliability: { type: "number" },
-        },
-      },
-    },
-  },
-} as const;
-
-async function buildNews(arabicName: string, latinName: string): Promise<NewsItem[]> {
-  const articles = await fetchArticles(arabicName, latinName).catch(() => []);
-  if (articles.length === 0) return [];
-
-  let enriched: { index: number; summary: string; relevance: number; reliability: number }[] = [];
-  try {
-    const data = await researchJson<{ items?: typeof enriched }>({
-      system: `${NO_HALLUCINATION_RULES} لا تلخّص إلا ما يظهر فعلًا في العنوان المعطى، ولا تضف تفاصيل غير موجودة. حافظ على صيغة "بحسب تقارير" إن كان العنوان تقريرًا أو شائعة.`,
-      user: [
-        `اللاعب: ${arabicName} (${latinName}).`,
-        "أمامك عناوين أخبار حقيقية. لكل عنوان: اكتب ملخصًا عربيًا من سطر واحد لا يتجاوز معنى العنوان،",
-        "وقيّم relevance (0-1) صلة الخبر باللاعب، و reliability (0-1) موثوقية المصدر.",
-        "استبعد ما لا يتعلق باللاعب عبر relevance منخفض.",
-        JSON.stringify(
-          articles.map((article, index) => ({
-            index,
-            title: article.title,
-            source: article.source,
-            publishedAt: article.publishedAt,
-          })),
-        ),
-      ].join("\n"),
-      schemaName: "news_analysis",
-      schema: newsSchema,
-    });
-    enriched = data.items ?? [];
-  } catch {
-    enriched = [];
-  }
-
-  const byIndex = new Map(enriched.map((item) => [item.index, item]));
-  return articles
-    .map((article, index) => {
-      const meta = byIndex.get(index);
-      return {
-        id: `${slug(latinName)}-${index}`,
-        title: article.title,
-        source: article.source,
-        sourceUrl: article.sourceUrl,
-        publishedAt: article.publishedAt,
-        summary: clean(meta?.summary),
-        relevance: meta?.relevance ?? 0.5,
-        reliability: meta?.reliability ?? 0.5,
-      } satisfies NewsItem;
-    })
-    .filter((item) => item.relevance >= 0.35)
-    .sort((a, b) => {
-      const freshness =
-        Date.parse(b.publishedAt ?? "0") / 1e11 - Date.parse(a.publishedAt ?? "0") / 1e11;
-      return (
-        freshness * 0.6 +
-        (b.relevance - a.relevance) * 0.25 +
-        (b.reliability - a.reliability) * 0.15
-      );
-    })
-    .slice(0, 8);
+async function buildNews(arabicName: string, latinName: string, refresh: boolean): Promise<NewsItem[]> {
+  const articles = await fetchArticles(arabicName, latinName, refresh).catch(() => []);
+  return articles.map((a, index) => ({ ...a, id: `${slug(latinName)}-${index}`, summary: null, relevance: 0.5, reliability: 0.5 }));
 }
 
 function ageFrom(birthDate: string | null): number | null {
@@ -309,71 +111,37 @@ export async function profileFor(args: {
 }): Promise<PlayerProfile> {
   const key = `profile:${slug(args.latinName)}`;
   // Keep the last good profile: a failed refresh must never wipe known details.
-  const previous = cacheGet<PlayerProfile>(key);
-  if (args.refresh) cacheDrop(`news:${args.latinName}`);
+  const previous = cacheGet<PlayerProfile>(`${key}:last`) ?? cacheGet<PlayerProfile>(key);
 
   return cached<PlayerProfile>(key, 30 * 60 * 1000, async () => {
     const pack = packFor(args.latinName);
-    const [portraitResult, aiResult, newsResult] = await Promise.allSettled([
-      resolvePortrait(args.latinName, args.displayName),
-      // Pack players are filled from the built-in pack: no AI credits spent.
-      pack ? Promise.reject(new Error("pack")) : researchJson<Record<string, unknown>>({
-        system: `${NO_HALLUCINATION_RULES} املأ الحقول المؤكدة فقط، واترك الباقي "".`,
-        user: [
-          `ابنِ ملفًا للاعب: ${args.displayName} (${args.latinName}).`,
-          "career: أهم 5 محطات. achievements: أهم 6 إنجازات حقيقية. stats: 4 أرقام موثوقة (مثل المباريات/الأهداف).",
-          "bio: نبذة عربية من 2-3 أسطر عن اللاعب ووضعه الحالي، بلا مبالغة ولا تخمين.",
-      "confidence: رقم بين 0 و 1 يمثل ثقتك بدقة الملف.",
-          "القيمة السوقية والتقييم: اتركهما \"\" إن لم تكن واثقًا.",
-        ].join("\n"),
-        schemaName: "player_profile",
-        schema: profileSchema,
-      }),
-      buildNews(args.displayName, args.latinName),
+    const [portrait, facts, news] = await Promise.all([
+      resolvePortrait(args.latinName, args.displayName).catch(() => null),
+      wikidataFacts(args.latinName, args.refresh).catch(() => null),
+      buildNews(args.displayName, args.latinName, args.refresh === true),
     ]);
-
-    const news = newsResult.status === "fulfilled" ? newsResult.value : [];
-    if (aiResult.status === "rejected" && previous && !pack) {
-      return { ...previous, news: news.length > 0 ? news : previous.news };
-    }
-    if (aiResult.status === "rejected" && portraitResult.status === "rejected") {
-      throw new AiUnavailableError("research_failed");
-    }
-
-    const ai = (aiResult.status === "fulfilled" ? aiResult.value : {}) as Record<string, unknown>;
-    const sources: { label: string; url: string }[] = [];
-    if (aiResult.status === "rejected") {
-      // AI unavailable: fill basic fields from Wikidata (real data, no guessing).
-      const facts = await wikidataFacts(args.latinName).catch(() => null);
-      if (facts) {
-        ai["birthDate"] = facts.birthDate ?? "";
-        ai["nationality"] = facts.nationality ?? "";
-        ai["position"] = facts.position ?? "";
-        ai["height"] = facts.height ?? "";
-        ai["club"] = facts.club ?? "";
-        ai["preferredFoot"] = facts.foot ?? "";
-        sources.push({ label: "ويكي بيانات", url: `https://www.wikidata.org/wiki/${facts.qid}` });
-      }
-      if (pack) {
-        ai["fullName"] = pack.fullName;
-        ai["birthDate"] = pack.birthDate;
-        ai["nationality"] = pack.nationality;
-        ai["position"] = pack.position;
-        ai["preferredFoot"] = pack.foot;
-        ai["height"] = pack.height;
-        ai["bio"] = pack.bio;
-        ai["career"] = pack.career;
-        ai["achievements"] = pack.achievements;
-        ai["confidence"] = 0.9;
-        if (!clean(ai["club"]) && pack.career.length) ai["club"] = pack.career[pack.career.length - 1]!.club;
-      }
-    }
-    const portrait = portraitResult.status === "fulfilled" ? portraitResult.value : null;
+    const ai: Record<string, unknown> = {
+      fullName: pack?.fullName ?? previous?.fullName,
+      birthDate: facts?.birthDate ?? pack?.birthDate ?? previous?.birthDate,
+      nationality: facts?.nationality ?? pack?.nationality ?? previous?.nationality,
+      position: facts?.position ?? pack?.position ?? previous?.position,
+      height: facts?.height ?? pack?.height ?? previous?.height,
+      club: facts?.club ?? previous?.club,
+      preferredFoot: facts?.foot ?? pack?.foot ?? previous?.preferredFoot,
+      shirtNumber: facts?.shirtNumber ?? previous?.shirtNumber,
+      bio: pack?.bio ?? portrait?.bio ?? previous?.bio,
+      career: facts?.career.length ? facts.career : pack?.career ?? previous?.career,
+      achievements: pack?.achievements.length ? pack.achievements : facts?.achievements.length ? facts.achievements : previous?.achievements,
+      confidence: facts || pack ? 0.9 : previous?.confidence ?? 0.4,
+    };
+    const sources = [...(previous?.sources ?? [])];
+    if (facts) sources.push({ label: "ويكي بيانات", url: `https://www.wikidata.org/wiki/${facts.qid}` });
+    if (pack) sources.push({ label: "المعلومات الأساسية — ويكيبيديا", url: `https://en.wikipedia.org/wiki/${encodeURIComponent(args.latinName.replace(/ /g, '_'))}` });
     const birthDate = clean(ai["birthDate"]);
 
     if (portrait?.pageUrl) sources.push({ label: "ويكيبيديا", url: portrait.pageUrl });
 
-    return {
+    const result: PlayerProfile = {
       id: slug(args.latinName),
       fullName: clean(ai["fullName"]),
       displayName: clean(ai["displayName"]) ?? args.displayName,
@@ -409,14 +177,16 @@ export async function profileFor(args: {
             .map((stat) => ({ label: clean(stat.label) ?? "", value: clean(stat.value) ?? "" }))
             .filter((stat) => stat.label && stat.value)
         : [],
-      image: portrait?.image ?? null,
-      imageSource: portrait?.imageSource ?? null,
-      imageKind: portrait?.image ? "photo" : "fallback",
-      news,
-      sources,
+      image: portrait?.image ?? previous?.image ?? null,
+      imageSource: portrait?.imageSource ?? previous?.imageSource ?? null,
+      imageKind: portrait?.image || previous?.image ? "photo" : "fallback",
+      news: news.length ? news : previous?.news ?? [],
+      sources: [...new Map(sources.map(s => [s.url, s])).values()],
       confidence:
         typeof ai["confidence"] === "number" ? Math.min(1, Math.max(0, ai["confidence"])) : 0.6,
       lastUpdated: new Date().toISOString(),
     };
+    cacheSet(`${key}:last`, result, 7 * 86400000);
+    return result;
   }, args.refresh === true);
 }

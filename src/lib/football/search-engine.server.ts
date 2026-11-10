@@ -1,6 +1,7 @@
 /** Self-sufficient search engine: Wikidata + fixed keyword tables. No AI credits needed. */
 import { cached } from "./cache.server";
 import { classifyQuery } from "./query-classify";
+import { ROSTER } from "./roster";
 
 const UA = "FootballBubbles/1.0 (https://bubble-sphere-football.lovable.app)";
 
@@ -39,9 +40,11 @@ function toHits(rows: Record<string, string>[]): EngineHit[] {
   const hits: EngineHit[] = [];
   for (const r of rows) {
     const latin = r["en"];
-    if (!latin || seen.has(r["p"]!)) continue;
-    seen.add(r["p"]!);
-    hits.push({ latinName: latin, displayName: r["ar"] ?? latin, club: r["teamL"] ?? null });
+    const person = r["p"];
+    if (!latin || !person || seen.has(person)) continue;
+    seen.add(person);
+    const known = ROSTER.find(p => p.latinName.toLowerCase() === latin.toLowerCase());
+    hits.push({ latinName: known?.latinName ?? latin, displayName: known?.displayName ?? r["ar"] ?? latin, club: r["teamL"] ?? null });
   }
   return hits;
 }
@@ -50,7 +53,8 @@ function toHits(rows: Record<string, string>[]): EngineHit[] {
 async function squadOf(clubQid: string, limit = 9): Promise<EngineHit[]> {
   const rows = await sparql(`SELECT ?p ?en ?ar ?links ?teamL WHERE {
     ?p p:P54 ?st . ?st ps:P54 wd:${clubQid} . FILTER NOT EXISTS { ?st pq:P582 ?e }
-    ?st pq:P580 ?start FILTER(YEAR(?start) >= ${new Date().getUTCFullYear() - 8})
+    OPTIONAL { ?st pq:P580 ?start } FILTER(!BOUND(?start) || ?start <= NOW())
+    FILTER NOT EXISTS { ?st wikibase:rank wikibase:DeprecatedRank }
     ?p wdt:P106 wd:Q937857 ; wdt:P569 ?dob FILTER(YEAR(?dob) >= ${new Date().getUTCFullYear() - 40})
     ?p wikibase:sitelinks ?links .
     OPTIONAL { wd:${clubQid} rdfs:label ?teamL FILTER(lang(?teamL)="ar") }
@@ -61,7 +65,8 @@ async function squadOf(clubQid: string, limit = 9): Promise<EngineHit[]> {
 async function leaguePlayers(leagueQid: string): Promise<EngineHit[]> {
   const rows = await sparql(`SELECT ?p ?en ?ar ?links ?teamL WHERE {
     ?team wdt:P118 wd:${leagueQid} . ?p p:P54 ?st . ?st ps:P54 ?team . FILTER NOT EXISTS { ?st pq:P582 ?e }
-    ?st pq:P580 ?start FILTER(YEAR(?start) >= ${new Date().getUTCFullYear() - 6})
+    OPTIONAL { ?st pq:P580 ?start } FILTER(!BOUND(?start) || ?start <= NOW())
+    FILTER NOT EXISTS { ?st wikibase:rank wikibase:DeprecatedRank }
     ?p wdt:P106 wd:Q937857 ; wikibase:sitelinks ?links . FILTER(?links > 15)
     OPTIONAL { ?team rdfs:label ?teamL FILTER(lang(?teamL)="ar") }
     ${LABELS} } ORDER BY DESC(?links) LIMIT 40`);
@@ -95,7 +100,7 @@ async function resolveEntity(text: string): Promise<Entity | null> {
   );
   const ids: string[] = (search.search ?? []).map((s: { id: string }) => s.id).filter((id: string) => /^Q\d+$/.test(id));
   if (!ids.length) return null;
-  const rows = await sparql(`SELECT ?p ?en ?ar ?kind ?club ?clubAr WHERE {
+  const rows = await sparql(`SELECT ?p ?en ?ar ?kind ?club ?clubAr ?since WHERE {
     VALUES ?p { ${ids.map((i) => `wd:${i}`).join(" ")} }
     { ?p wdt:P106 wd:Q937857 . BIND("player" AS ?kind)
       OPTIONAL { ?p p:P54 ?st . ?st ps:P54 ?club . FILTER NOT EXISTS { ?st pq:P582 ?e }
@@ -106,12 +111,13 @@ async function resolveEntity(text: string): Promise<Entity | null> {
     UNION { ?p wdt:P31/wdt:P279* wd:Q476028 . BIND("club" AS ?kind) }
     ${LABELS} }`);
   if (!rows.length) return null;
-  const order = (r: Record<string, string>) => ids.indexOf(r["p"]!.split("/").pop()!);
+  const order = (r: Record<string, string>) => ids.indexOf(r["p"]?.split("/").pop() ?? "");
   rows.sort((a, b) => order(a) - order(b));
-  const best = rows[0]!;
-  const qid = best["p"]!.split("/").pop()!;
+  const best = rows[0];
+  const qid = best?.["p"]?.split("/").pop();
+  if (!best || !qid) return null;
   const mine = rows.filter((r) => r["p"] === best["p"] && r["club"]);
-  const clubRow = mine[mine.length - 1];
+  const clubRow = mine.sort((a,b) => (b["since"] ?? "").localeCompare(a["since"] ?? ""))[0];
   return {
     qid,
     kind: best["kind"] as Entity["kind"],

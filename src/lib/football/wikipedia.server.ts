@@ -15,7 +15,7 @@ async function summary(lang: "ar" | "en", title: string): Promise<Summary | null
   try {
     const res = await fetch(
       `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}?redirect=true`,
-      { headers: { "User-Agent": UA, Accept: "application/json" } },
+      { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(6000) },
     );
     if (!res.ok) return null;
     const data = (await res.json()) as Summary;
@@ -30,7 +30,7 @@ async function searchTitle(lang: "ar" | "en", query: string): Promise<string | n
   try {
     const res = await fetch(
       `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&origin=*&srsearch=${encodeURIComponent(query)}`,
-      { headers: { "User-Agent": UA } },
+      { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(6000) },
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { query?: { search?: { title?: string }[] } };
@@ -55,8 +55,12 @@ export async function resolvePortrait(latinName: string, arabicName: string): Pr
   const key = `wiki:${latinName}|${arabicName}`;
   return cached<WikiPortrait>(key, 12 * 60 * 60 * 1000, async () => {
     const attempts: Array<() => Promise<Summary | null>> = [
-      () => summary("en", latinName),
       () => summary("ar", arabicName),
+      async () => {
+        const t = await searchTitle("ar", `${arabicName} لاعب كرة قدم`);
+        return t ? summary("ar", t) : null;
+      },
+      () => summary("en", latinName),
       async () => {
         const t = await searchTitle("en", `${latinName} footballer`);
         return t ? summary("en", t) : null;

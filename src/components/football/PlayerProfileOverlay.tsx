@@ -256,8 +256,8 @@ export function PlayerProfileOverlay({
                 <Field label="القدم المفضلة" value={profile.preferredFoot} />
                 <Field label="الرقم" value={profile.shirtNumber} />
                 <Field label="الطول" value={profile.height} />
-                <Field label="القيمة السوقية" value={profile.marketValue} />
-                <Field label="التقييم" value={profile.rating} />
+                {profile.marketValue && <Field label="القيمة السوقية" value={profile.marketValue} />}
+                {profile.rating && <Field label="التقييم" value={profile.rating} />}
               </dl>
 
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -345,7 +345,7 @@ export function PlayerProfileOverlay({
                     )}
                     {(verifiedClub.evidence?.length ?? 0) > 0 && (
                       <ul className="mt-2 space-y-1.5">
-                        {verifiedClub.evidence!.slice(0, 6).map((e) => (
+                        {verifiedClub.evidence?.slice(0, 6).map((e) => (
                           <li key={e.url + e.title}>
                             <a href={e.url} target="_blank" rel="noopener noreferrer" className="glass-panel flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
                               <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
