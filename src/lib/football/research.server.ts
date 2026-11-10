@@ -30,7 +30,7 @@ interface DiscoveryRaw {
   players?: {
     displayName?: string;
     latinName?: string;
-    club?: string;
+    club?: string | null;
     nationality?: string;
     position?: string;
     fame?: PlayerSeed["fame"];
